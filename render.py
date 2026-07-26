@@ -46,6 +46,8 @@ def build_timeline(chunks: list[dict], fps: int) -> list[dict]:
         imgs = chunk.get("images", [])
         if not imgs:
             raise RuntimeError(f"chunk {chunk['index']:03d} has no images — run images.py")
+        if not chunk.get("duration"):
+            raise RuntimeError(f"chunk {chunk['index']:03d} has no measured duration — run tts.py")
         duration = float(chunk["duration"])
         chunk_end = t_cursor + duration
         n = len(imgs)
