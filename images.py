@@ -30,20 +30,35 @@ PIXABAY_SEARCH = "https://pixabay.com/api/"
 
 
 def images_needed(duration: float, cfg: dict) -> int:
-    """One image per `seconds_per_image`, clamped so each image is shown for
-    between min and max seconds."""
+    """Number of images for a chunk: aim for one image per 8-12s of narration.
+
+    Picks the count whose per-image on-screen time sits inside the [min, max]
+    band, or — for durations where no split fits (e.g. ~15s: 1 image is 15s but
+    2 is 7.5s) — the count whose per-image time is *closest* to the band. Ties
+    keep the smaller count (fewer image fetches). Never fewer than 1.
+    """
     vid = cfg.get("video", {})
-    target = float(vid.get("seconds_per_image", 10))
     lo = float(vid.get("min_seconds_per_image", 8))
     hi = float(vid.get("max_seconds_per_image", 12))
-    n = max(1, round(duration / target))
-    # Too few images -> each shown too long: add more.
-    while duration / n > hi:
-        n += 1
-    # Too many images -> each shown too briefly: remove some.
-    while n > 1 and duration / n < lo:
-        n -= 1
-    return n
+    if duration <= 0:
+        return 1
+
+    def penalty(per: float) -> float:
+        if per > hi:
+            return per - hi     # too long / stale
+        if per < lo:
+            return lo - per     # too fast / flashing
+        return 0.0
+
+    # Consider 1 .. enough images that each would dip below `lo`.
+    import math
+    max_n = max(1, math.ceil(duration / lo))
+    best_n, best_pen = 1, penalty(duration)
+    for n in range(2, max_n + 1):
+        pen = penalty(duration / n)
+        if pen < best_pen - 1e-9:  # strictly better; ties keep the smaller n
+            best_n, best_pen = n, pen
+    return best_n
 
 
 def _ext_from_url(url: str, default: str = ".jpg") -> str:

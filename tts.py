@@ -58,10 +58,13 @@ def synthesize_chunk(pipeline, text: str, voice: str, speed: float):
     segments; we stitch them together in order."""
     import numpy as np
     segments = []
-    # The generator yields one tuple per internal segment.
+    # The generator yields one item per internal segment. Depending on the
+    # kokoro version that item is either a (graphemes, phonemes, audio) tuple
+    # or a Result dataclass with an `.audio` attribute — handle both.
     for result in pipeline(text, voice=voice, speed=speed):
-        # result is (graphemes, phonemes, audio); we only need the audio.
-        audio = result[-1]
+        audio = getattr(result, "audio", None)
+        if audio is None:
+            audio = result[-1]
         segments.append(_to_numpy(audio))
     if not segments:
         raise RuntimeError("Kokoro returned no audio for a chunk (empty text?).")

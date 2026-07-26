@@ -45,7 +45,13 @@ def check_espeak() -> tuple[str, str]:
 
 def check_python_package(module: str, pip_name: str | None = None) -> tuple[str, str]:
     pip_name = pip_name or module
-    spec = importlib.util.find_spec(module)
+    try:
+        # find_spec on a dotted name imports parent packages; if a parent (e.g.
+        # 'google') is absent it RAISES ModuleNotFoundError rather than
+        # returning None, so treat any import-time error as "missing".
+        spec = importlib.util.find_spec(module)
+    except (ImportError, ValueError):
+        spec = None
     if spec is not None:
         return PASS, f"import {module} OK"
     return FAIL, f"missing — pip install {pip_name}"
