@@ -1,0 +1,27 @@
+# Pinned to the latest versions available at build time (verified against PyPI).
+# Python 3.11+ required.
+
+# --- Core / shared ---
+requests==2.34.2
+python-dotenv==1.2.2
+PyYAML==6.0.3
+Pillow==12.3.0          # qc.py single-colour frame analysis
+
+# --- TTS (tts.py) ---
+# kokoro pulls in torch + numpy transitively. Those are large and
+# platform-specific (CPU vs CUDA wheels), so they are intentionally NOT pinned
+# here — let kokoro/pip resolve the right wheel for your machine. Kokoro also
+# needs the espeak-ng system package (see README / doctor.py).
+kokoro==0.9.4
+soundfile==0.14.0
+
+# --- Keyword extraction (script.py) ---
+# The NEW unified Google GenAI SDK. Import is `from google import genai`.
+# (NOT the older `google-generativeai` package.)
+google-genai==2.14.0
+
+# --- YouTube upload (upload.py) ---
+google-api-python-client==2.198.0
+google-auth==2.56.2
+google-auth-oauthlib==1.4.0
+google-auth-httplib2==0.4.0

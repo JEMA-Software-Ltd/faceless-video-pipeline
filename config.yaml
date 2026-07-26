@@ -1,0 +1,80 @@
+# config.yaml — tunable knobs for the pipeline.
+# Secrets do NOT live here; they live in .env (see .env.example).
+
+video:
+  # Output resolution and frame rate. 1920x1080 @ 25fps per the render spec.
+  width: 1920
+  height: 1080
+  fps: 25
+  # Ken Burns pace. images.py picks one image per `seconds_per_image` of a
+  # chunk's *measured* audio, clamped to [min, max]. Spec: one image / 8-12s.
+  seconds_per_image: 10
+  min_seconds_per_image: 8
+  max_seconds_per_image: 12
+  # x264 knobs for the per-clip encode (the only encode that happens; the
+  # concat + final mux both copy the video stream).
+  crf: 20
+  preset: medium
+
+tts:
+  # Kokoro voice. 'b*' voices are British English (bf_* female, bm_* male),
+  # which suits a UK audience. lang_code 'b' = British English.
+  voice: bf_emma
+  lang_code: b
+  sample_rate: 24000   # Kokoro outputs 24kHz.
+  speed: 1.0
+
+gemini:
+  # Model used only to extract visual search keywords per chunk.
+  model: gemini-2.0-flash
+  keywords_per_chunk: 3
+
+images:
+  per_page: 20              # candidates to pull per query before picking.
+  orientation: landscape    # Pexels term; Pixabay equivalent is 'horizontal'.
+  min_width: 1920
+  min_height: 1080
+
+captions:
+  # Burned-in captions are OFF by default (spec). When enabled, FONT_PATH in
+  # .env must point at a real .ttf/.otf — drawtext needs an absolute path.
+  enabled: false
+  font_size: 44
+  font_colour: white
+  border_width: 3
+  border_colour: black
+  bottom_margin: 90
+  max_chars_per_line: 48
+
+upload:
+  privacy: private          # Always private; publishAt controls going live.
+  publish_time: "17:00"     # Local wall-clock time in `timezone`.
+  timezone: Europe/London   # Handles GMT/BST automatically via zoneinfo.
+  category_id: 22           # 22 = People & Blogs.
+  made_for_kids: false
+  tags:
+    - personal finance
+    - budgeting uk
+    - saving money
+    - money tips
+    - financial education
+  default_description: |
+    Educational personal-finance and budgeting content for a UK audience.
+
+    This channel is for general information only and is not financial advice.
+
+qc:
+  audio_video_max_diff: 0.5   # seconds; fail if |audio - video| exceeds this.
+  black_max_duration: 0.5     # seconds; fail on any black segment longer.
+  black_pixel_threshold: 0.10 # blackdetect pix_th (lower = stricter "black").
+  sample_frames: 10           # evenly spaced frames to inspect.
+  single_colour_threshold: 0.95  # fail a frame if one colour covers > this.
+  min_kbps: 200               # implausibly small file => broken render.
+  max_kbps: 12000             # implausibly large file => something wrong.
+
+dry_run:
+  # CRITICAL: dry-run makes a ~30s video from a few chunks so the whole chain
+  # can be validated in under two minutes before trusting a full 15-min encode.
+  num_chunks: 3
+  truncate_chars: 220   # cap each chunk's narration text so TTS stays short.
+  target_seconds: 30    # informational; actual length follows measured audio.
