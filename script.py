@@ -175,20 +175,20 @@ _TOPIC_IMAGERY = {
     "savings": "savings jar coins",
     "saver": "piggy bank savings",
     "isa": "savings account statement",
-    "bank": "high street bank",
+    "bank": "bank branch entrance",
     "bond": "financial certificate document",
     "minibond": "financial certificate document",
     "minibonds": "financial certificate document",
     "interest": "rising graph chart",
     "investment": "stock market chart",
-    "investor": "worried person paperwork",
-    "investors": "worried person paperwork",
+    "investor": "anxious person letter",
+    "investors": "anxious person letter",
     "pension": "retired couple paperwork",
     "retired": "elderly person worried",
-    "money": "british pound notes",
+    "money": "banknotes counting hands",
     "pounds": "british pound coins",
-    "cash": "british pound notes",
-    "capital": "london financial district",
+    "cash": "banknotes counting hands",
+    "capital": "city of london skyline",
     "loan": "loan agreement signing",
     "loans": "loan agreement signing",
     "lending": "loan agreement signing",
@@ -206,7 +206,7 @@ _TOPIC_IMAGERY = {
     "charges": "fine print magnifying glass",
     # Collapse / consequences
     "administration": "closed business sign",
-    "administrators": "empty office desks",
+    "administrators": "cleared office boxes",
     "collapse": "falling chart graph",
     "collapsed": "falling chart graph",
     "failed": "falling chart graph",
@@ -222,7 +222,7 @@ _TOPIC_IMAGERY = {
     "whistleblower": "person silhouette window",
     "warnings": "warning sign red",
     "victims": "worried person kitchen table",
-    "taxpayer": "british pound notes",
+    "taxpayer": "banknotes counting hands",
     # Funds / asset management. Deliberately omits ubiquitous words like "fund"
     # and "shares" — a trigger that fires in almost every paragraph just becomes
     # a new source of repetition. These are the distinctive terms.
@@ -256,16 +256,124 @@ _TOPIC_IMAGERY = {
     "council": "town hall building",
     "performance": "line chart screen",
     "strategy": "chess board pieces",
+    # Franchising / retail operations / real estate. Same rule as above: skip
+    # words so common they would fire in nearly every paragraph.
+    "franchise": "shop front signage",
+    "franchising": "shop front signage",
+    "franchisee": "small business owner",
+    "franchisees": "small business owner",
+    "franchisor": "corporate headquarters building",
+    "royalty": "contract signing pen",
+    "royalties": "contract signing pen",
+    "landlord": "estate agent sign",
+    "tenant": "empty retail unit",
+    "lease": "lease contract signing",
+    "leases": "lease contract signing",
+    "rent": "for lease sign",
+    "forecourt": "petrol station forecourt",
+    "restaurant": "fast food counter",
+    "restaurants": "fast food counter",
+    "bakery": "bakery bread counter",
+    "burger": "burger and fries",
+    "kitchen": "commercial kitchen staff",
+    "counter": "shop service counter",
+    "till": "cash register till",
+    "shops": "british high street shops",
+    "shop": "british high street shops",
+    # Costs, margins, supply chain
+    "margin": "calculator and receipts",
+    "margins": "calculator and receipts",
+    "wages": "shop staff serving",
+    "staff": "shop staff serving",
+    "employment": "shop staff serving",
+    "packaging": "cardboard packaging boxes",
+    "supply": "warehouse logistics",
+    "distribution": "delivery lorry depot",
+    "warehouse": "warehouse shelves stock",
+    "manufacturing": "factory production line",
+    "integrated": "factory production line",
+    "expenditure": "construction site crane",
+    "capital expenditure": "construction site crane",
+    "energy": "electricity meter dial",
+    "beef": "butcher raw meat",
+    "flour": "flour dough baking",
+    "ovens": "industrial bakery oven",
+    "vans": "delivery van street",
+    "prices": "price tag label",
+    "pricing": "price tag label",
+    "customers": "customer queue counter",
+    "volumes": "busy shop queue",
+    "leverage": "seesaw balance",
+    "brand": "illuminated brand sign",
+    # Household bills / energy / utilities
+    "prepayment": "prepayment meter key",
+    "meter": "utility meter closeup",
+    "meters": "utility meter closeup",
+    "standing charge": "energy bill statement",
+    "tariff": "energy bill statement",
+    "electricity": "electricity pylon sky",
+    "gas": "gas hob flame",
+    "ofgem": "energy regulator office",
+    "bills": "unpaid bills envelopes",
+    "bill": "unpaid bills envelopes",
+    "direct debit": "bank statement paper",
+    # Insurance / credit / paying over time
+    # NB "premium" is deliberately NOT a trigger. In this domain it usually means
+    # a surcharge ("the poverty premium"), not an insurance premium, so mapping
+    # it to policy imagery is wrong more often than right — and as the subject
+    # word of a whole script it fires everywhere and dominates the imagery.
+    "insurance": "car insurance documents",
+    "instalment": "monthly payment calendar",
+    "instalments": "monthly payment calendar",
+    "doorstep": "front door step",
+    "rent to own": "furniture showroom sofa",
+    "catalogue": "mail order catalogue",
+    "subprime": "credit card payment",
+    "default": "final demand letter",
+    "buffer": "empty purse coins",
+    "illiquidity": "empty wallet hands",
+    "advance": "calendar circled date",
+    "discount": "sale discount sign",
+    "price": "price tag label",
+    # Benefits / the state
+    "claimant": "job centre entrance",
+    "claimants": "job centre entrance",
+    "deduction": "payslip deductions",
+    "deductions": "payslip deductions",
+    "allowance": "government benefit letter",
+    "benefit": "government benefit letter",
+    "levy": "tax form paperwork",
+    "regressive": "weighing scales tilted",
+    # Shops / food / the domestic scene
+    "corner shop": "corner shop exterior",
+    "convenience": "convenience store aisle",
+    "supermarket": "supermarket aisle trolley",
+    "superstore": "supermarket car park",
+    "food": "grocery shopping basket",
+    "multipack": "supermarket aisle trolley",
+    "fridge": "kitchen fridge open",
+    "boiler": "boiler repair engineer",
+    "uniform": "school uniform child",
+    "postcode": "uk residential street",
+    "poverty": "empty kitchen cupboard",
+    "car": "parked car residential street",
     # Generic scene-setting
-    "london": "london financial district",
+    "london": "city of london skyline",
     "kent": "english countryside town",
     "britain": "london skyline",
     "british": "london skyline",
-    "company": "office building exterior",
-    "firm": "office building exterior",
     "people": "crowd city street",
     "public": "crowd city street",
 }
+
+# INVARIANT: no _TOPIC_IMAGERY value may also appear in _GENERIC_IMAGERY.
+# A phrase reachable from both a trigger AND the fall-through pool gets selected
+# twice as often as anything else and dominates the video. "company" -> "office
+# building exterior" was the worst case: on a script about two companies it
+# fired in 16 of 49 chunks while the same phrase was also being handed out as
+# filler, producing 19 uses of one image cue. Ubiquitous words ("company",
+# "firm") are deliberately absent as triggers for the same reason — see the
+# note above the funds block. _assert_no_pool_overlap() enforces this at import.
 
 # Rotated (by chunk index) to top up chunks whose text has no trigger, so
 # neighbouring chunks don't all land on the same photo.
@@ -287,6 +395,18 @@ _GENERIC_IMAGERY = [
     "escalator office lobby",
     "rain city pavement",
 ]
+
+def _assert_no_pool_overlap() -> None:
+    """Enforce the invariant documented above. Cheap, and it fails loudly at
+    import rather than silently skewing a 20-minute video's imagery."""
+    overlap = sorted(set(_TOPIC_IMAGERY.values()) & set(_GENERIC_IMAGERY))
+    if overlap:
+        raise RuntimeError(
+            "keyword tables overlap; these phrases are reachable from both a "
+            f"trigger and the fall-through pool and will be over-used: {overlap}")
+
+
+_assert_no_pool_overlap()
 
 _PROPER_NOUN_RE = re.compile(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){1,3})\b")
 
