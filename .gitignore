@@ -1,0 +1,41 @@
+# Secrets and credentials — never commit these.
+.env
+token.json
+*.token.json
+# Google OAuth client file downloaded from Cloud Console. Contains a real
+# client_id/client_secret pair; the pipeline reads those from .env instead, so
+# this file never needs to be in the repo.
+client_secret.json
+client_secret*.json
+*credentials*.json
+service-account*.json
+
+# Working directories (per-day render artifacts)
+work/
+
+# Per-run pipeline logs
+logs/
+
+# Your own scripts are YOUR content and should not be published with the tool.
+# Only the format example ships. Drop scripts/<YYYY-MM-DD>.md in here and they
+# stay local — this also stops an automated/scheduled writer from ever getting
+# your channel's material into a public commit by accident.
+scripts/*
+!scripts/example.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
