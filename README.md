@@ -2,8 +2,11 @@
 
 First of all to see our results you can checkout https://www.youtube.com/@Clara-Studios to see the end product, we create finance stories, documentaries ect. TTS is Edge as we think it sounds better.
 
-This was made with the help of claude code, bare in mind claude is an ai and can make mistakes (especially security) 
+This was made with the help of claude code, bare in mind claude is an ai and can make mistakes (especially security).
 
+Personally we do NOT upload via API. We download from the work folder and upload manually. This just means I can do a full check before upload (we would recommend the same). 
+
+Finally, we can also recommend using an Ai to run all terminal commands for you while you are away to come back to a full video.
 
 Takes a script **you wrote** and turns it into a narrated 1080p video — text-to-speech narration, stock photos with a slow Ken Burns pan, a colour grade, automated quality checks — then uploads it to YouTube as a private, scheduled video. It is six small Python programs chained together by one command.
 
