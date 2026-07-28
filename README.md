@@ -1,16 +1,17 @@
 # Faceless video pipeline
 
-First of all to see our results you can checkout https://www.youtube.com/@Clara-Studios to see the end product, we create finance stories, documentaries ect. TTS is Edge as we think it sounds better.
-
-This was made with the help of claude code, bare in mind claude is an ai and can make mistakes (especially security).
-
-Personally we do NOT upload via API. We download from the work folder and upload manually. This just means I can do a full check before upload (we would recommend the same). 
-
-Finally, we can also recommend using an Ai to run all terminal commands for you while you are away to come back to a full video.
-
-Takes a script **you wrote** and turns it into a narrated 1080p video — text-to-speech narration, stock photos with a slow Ken Burns pan, a colour grade, automated quality checks — then uploads it to YouTube as a private, scheduled video. It is six small Python programs chained together by one command.
+Takes a script **you wrote** and turns it into a narrated 1080p video — text-to-speech narration, stock photos with a slow Ken Burns pan, a colour grade, automated quality checks — then optionally uploads it to YouTube as a private, scheduled video. It is six small Python programs chained together by one command.
 
 **It does not write scripts.** There is no content generation anywhere in this tool. You write the words; the pipeline reads them aloud and finds pictures. If you are looking for something that invents videos for you, this is not it.
+
+You can see the end product at [youtube.com/@Clara-Studios](https://www.youtube.com/@Clara-Studios) — UK finance stories and documentaries. Everything on that channel was rendered with this.
+
+### A few notes from actually using it
+
+- **We do not upload via the API.** We take the finished file out of `work/` and upload it by hand, so there is a full human check before anything reaches the channel. `upload.py` exists and works, but we would recommend the manual route for anything you care about.
+- **Edge is the default TTS** because we think it sounds better than the local option. Read [Choosing a TTS backend](#choosing-a-tts-backend) before you commit to it — there is a licensing catch.
+- **This was built with Claude Code.** Bear in mind an AI wrote most of it and can make mistakes, particularly around security. Read [Security notes](#security-notes) and satisfy yourself before you point it at credentials that matter.
+- **Renders are long.** Handing the terminal commands to an AI agent and coming back later works well, and is how most of these videos got made.
 
 ---
 
@@ -102,8 +103,8 @@ ffmpeg -version
 git --version
 
 # 4. Download and enter the project
-git clone <your-repo-url>
-cd <repo-folder>
+git clone https://github.com/JamesEdwardMcGee/faceless-video-pipeline.git
+cd faceless-video-pipeline
 
 # 5. Create and activate a virtual environment
 python -m venv .venv
@@ -116,7 +117,7 @@ pip install -r requirements.txt
 You know step 5 worked when your prompt gains a `(.venv)` prefix:
 
 ```
-(.venv) PS C:\Users\you\projects\repo>
+(.venv) PS C:\Users\you\projects\faceless-video-pipeline>
 ```
 
 ### macOS (Terminal)
@@ -131,8 +132,8 @@ Open **Terminal** (Applications → Utilities → Terminal).
 brew install python@3.12 ffmpeg git espeak-ng
 
 # 3. Download and enter the project
-git clone <your-repo-url>
-cd <repo-folder>
+git clone https://github.com/JamesEdwardMcGee/faceless-video-pipeline.git
+cd faceless-video-pipeline
 
 # 4. Create and activate a virtual environment
 python3 -m venv .venv
@@ -150,8 +151,8 @@ sudo apt-get update
 sudo apt-get install -y python3 python3-venv python3-pip ffmpeg git espeak-ng
 
 # 2. Download and enter the project
-git clone <your-repo-url>
-cd <repo-folder>
+git clone https://github.com/JamesEdwardMcGee/faceless-video-pipeline.git
+cd faceless-video-pipeline
 
 # 3. Create and activate a virtual environment
 python3 -m venv .venv
@@ -183,14 +184,20 @@ If PowerShell refuses with an execution-policy error, run:
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
+**Every stage suddenly says "PyYAML not installed".**
+Almost always means the virtual environment is not active in that terminal — check your prompt for the `(.venv)` prefix. A new terminal window does not inherit it; you must activate again each time.
+
 **`./run.sh` does not run in PowerShell.**
-`run.sh` is a bash script. PowerShell cannot execute it. Either run the six stages individually as `python script.py …` (see [Running it](#running-it)), or use **Git Bash**, which Git for Windows installs — right-click in the project folder → "Git Bash Here" → then `./run.sh` works.
+`run.sh` is a bash script. PowerShell cannot execute it. Either run the six stages individually as `python script.py …` (see [Running it](#running-it)), or use **Git Bash**, which Git for Windows installs — right-click in the project folder → "Git Bash Here" → then `./run.sh` works. Note that typing `bash run.sh` in PowerShell may invoke WSL instead, which will not have your dependencies.
 
 **`ZoneInfoNotFoundError: 'Europe/London'`.**
 Windows has no system timezone database. `upload.py` needs one to schedule the publish time, so without it the pipeline dies **at the very last step, after a full render has already completed**. The `tzdata` package supplies it and is pinned in `requirements.txt` — if you see this error, you skipped `pip install -r requirements.txt` or are running the wrong Python.
 
 **`UnicodeEncodeError: 'charmap' codec can't encode character '\u2713'`.**
 Windows consoles default to the legacy cp1252 encoding, which cannot print the ✓/✗ in the QC report or the em-dashes in log messages. This used to kill `qc.py` mid-report. It is fixed in `common.py`, which forces UTF-8 on the output streams at import — but if you see it in your own additions, that is the cause.
+
+**`PermissionError: [WinError 32]` when render starts.**
+A leftover file handle on a clip from a previous run, usually because a render was killed part-way. Close any player or Explorer preview showing the file, or reboot. Do not kill renders mid-run if you can avoid it.
 
 **Renders look like they have hung.** They have not. See [What to expect](#what-to-expect).
 
@@ -215,6 +222,8 @@ Sign up at [pixabay.com/api/docs](https://pixabay.com/api/docs/), paste into `PI
 ### Google AI Studio — Gemini, for image keywords (free tier)
 Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), paste into `GEMINI_API_KEY`. The pipeline makes **one** batched call per video, so free-tier limits are ample.
 
+> Check which models still carry a free tier before you set `gemini.model` — the free/paid split has moved more than once, and a model name that is merely *visible* to your key is not necessarily one you can call. A `429` with `limit: 0`, or a `403 PERMISSION_DENIED`, means that model is not free on your project. Flash and Flash-Lite tier models are the usual safe choice; keyword extraction is trivial work and does not need anything larger.
+
 ### YouTube — OAuth, for uploading
 
 This is the fiddly one. In order:
@@ -223,7 +232,7 @@ This is the fiddly one. In order:
 2. Enable the **YouTube Data API v3** for it ([direct link](https://console.cloud.google.com/apis/library/youtube.googleapis.com)).
 3. Configure the **OAuth consent screen**. Choose **External**.
 4. **Publish the consent screen.** Do not leave it in "Testing".
-   > ⚠️ **This matters more than anything else on this page.** While the consent screen is in Testing, Google expires refresh tokens after **7 days**. Your uploads will work for a week and then start failing with `invalid_grant`, and the cause is not obvious. Click **Publish App** on the consent screen. You do not need Google verification for your own personal use with the `youtube.upload` scope.
+   > ⚠️ **This matters more than anything else on this page.** While the consent screen is in Testing, only accounts on the test-user list can authorise at all — everyone else gets `Error 403: access_denied` — and Google expires refresh tokens after **7 days**. Your uploads will work for a week and then start failing with `invalid_grant`, and the cause is not obvious. Click **Publish App** on the consent screen. You do not need Google verification for your own personal use with the `youtube.upload` scope; you will see an "unverified app" warning at sign-in, and clicking through it is expected.
 5. Credentials → **Create Credentials** → **OAuth client ID** → application type **Desktop app**. Copy the client ID and secret into `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`.
    > You can also download `client_secret.json`, but this pipeline does not read it. It is gitignored specifically so it cannot end up in a commit.
 6. Run the one-off sign-in. It opens a browser, you approve, and it prints a refresh token:
@@ -232,10 +241,36 @@ This is the fiddly one. In order:
    ```
    Paste the printed value into `YOUTUBE_REFRESH_TOKEN`. You only do this once.
 
-> ⚠️ **The Google account you sign in with must already have a YouTube channel.** If it does not, the upload fails with HTTP 401 `youtubeSignupRequired` — after the entire video has rendered. The OAuth is fine in that case; there is simply no channel to upload to. Go to [youtube.com](https://www.youtube.com/), sign in, and create the channel first.
+> ⚠️ **The Google account you sign in with must already have a YouTube channel.** If it does not, the upload fails with HTTP 401 `youtubeSignupRequired` — after the entire video has rendered. The OAuth is fine in that case; there is simply no channel to upload to. Go to [youtube.com](https://www.youtube.com/), sign in, and create the channel first. If your channel is a **Brand Account**, pick it explicitly at the account-chooser step of `get_token.py` — choosing the personal account instead produces the same error.
 
 ### Fonts — only for burned-in captions
-Captions are off by default. If you turn them on (`captions.enabled: true`), set `FONT_PATH` to an **absolute** path to a `.ttf`/`.otf`. ffmpeg's text filter rejects relative paths.
+Captions are off by default. If you turn them on (`captions.enabled: true`), set `FONT_PATH` to an **absolute** path to a `.ttf`/`.otf`. ffmpeg's text filter rejects relative paths. On Windows, use forward slashes: `C:/Windows/Fonts/arial.ttf`.
+
+---
+
+## Security notes
+
+Most of what this tool touches is a credential. Worth knowing what each one can do.
+
+**What lives on your machine, and what it grants**
+
+| File | Contains | If leaked |
+|---|---|---|
+| `.env` | all API keys plus the YouTube refresh token | the refresh token allows uploading to your channel until you revoke it |
+| `client_secret.json` | OAuth client ID and secret | identifies your app; not sufficient alone to reach your channel, but should not be public |
+| `token.json` | cached access token | short-lived, but treat as sensitive |
+
+All three are gitignored. So is `work/`, `logs/`, and everything in `scripts/` except `example.md`.
+
+**Scope is deliberately minimal.** `get_token.py` requests only `youtube.upload`. It cannot read your videos, your analytics, your comments or your account details, and it cannot delete anything. If you extend it, keep the scope as narrow as the job allows.
+
+**Uploads are always private.** `upload.py` sets `privacyStatus: private` with a scheduled `publishAt`. There is no code path that publishes immediately. Nothing reaches an audience without you or the schedule allowing it.
+
+**Rotate anything you paste anywhere.** Refresh tokens and API keys get pasted into chat windows, logs and screenshots more often than anyone admits. Revoke a YouTube token at [myaccount.google.com/permissions](https://myaccount.google.com/permissions); Pexels, Pixabay and Gemini keys can be regenerated from their dashboards. It costs two minutes.
+
+**`.gitignore` protects the future, not the past.** If a secret was ever *committed*, rewriting history does not unpublish it — GitHub serves unreachable objects by SHA indefinitely, forks keep their own copies, and caches are beyond your reach. Rotation is the only real fix. Note also that merely *staging* a file leaves a loose object in `.git/objects`; it is never pushed, but `git reflog expire --expire-unreachable=now --all && git gc --prune=now` will clear it locally.
+
+**Everything here runs on your machine.** No telemetry, no analytics, no phone-home. The only outbound calls are to Pexels, Pixabay, Google and — if you use the `edge` backend — Microsoft.
 
 ---
 
@@ -294,6 +329,8 @@ Save it as `scripts/YYYY-MM-DD.md`. See [`scripts/example.md`](scripts/example.m
 
 Your scripts stay on your machine — everything in `scripts/` except `example.md` is gitignored.
 
+**Write for the ear, not the page.** The narration is synthesised once and never edited, so anything ambiguous on the page becomes ambiguous in the audio. In practice that means: spell numbers and money out in words rather than using digits or symbols, avoid brackets and slashes (they vanish audibly and the sentence collapses), keep sentences under about 25 words, and make each paragraph self-contained — the pipeline splits on paragraphs, so one that trails into the next will sound broken.
+
 ### 3. Do a dry run
 
 ```bash
@@ -302,7 +339,7 @@ Your scripts stay on your machine — everything in `scripts/` except `example.m
 
 This builds a ~30 second video from the first few chunks and exercises the entire chain in about two minutes. **Do this before trusting a full render.**
 
-> ⚠️ A dry run **overwrites** `chunks.json` and `video.mp4` for that date with the shortened version. Never dry-run against a date whose full render you want to keep.
+> ⚠️ A dry run **overwrites** `chunks.json` and `video.mp4` for that date with the shortened version. Never dry-run against a date whose full render you want to keep. A full render started against dry-run state will silently produce a 30-second video that passes QC, because QC compares the video against its own audio and both are the truncated version.
 
 ### 4. Do the real run
 
@@ -350,6 +387,8 @@ python images.py --date 2026-07-28 --force
 
 > ⚠️ **`script.py` is the exception.** It rewrites `chunks.json` from scratch, discarding measured durations and image paths. Re-running the whole pipeline after a late failure therefore redoes all the narration and re-downloads every image. If only render/qc/upload failed, run those three directly instead.
 
+> If you change TTS backend or voice, re-run `tts.py --force`. Without it, existing wavs are kept and you get a video that changes narrator part-way through.
+
 ### Upload behaviour
 
 Uploads are **always** private, with the publish time set to the next occurrence of `upload.publish_time` in `upload.timezone`. Nothing is ever public the moment it uploads. If that time has already passed today, it rolls to tomorrow.
@@ -362,6 +401,7 @@ Rough numbers from real runs on an ordinary desktop CPU, no GPU.
 
 | | 13-minute video | 18-minute video |
 |---|---|---|
+| Script length (words) | ~1,900 | ~2,700 |
 | Chunks (paragraphs) | ~45 | ~67 |
 | Images downloaded | ~85 | ~117 |
 | Narration (TTS) | ~4 min (edge) | ~7 min (edge) |
@@ -369,7 +409,9 @@ Rough numbers from real runs on an ordinary desktop CPU, no GPU.
 | **Encoding** | **~40 min** | **~65 min** |
 | Output file | ~450 MB | ~590 MB |
 
-**Encoding dominates, and it is slow by design.** Each still is upscaled hugely before the zoom is applied — that is what stops the pan juddering — so budget **25–30 seconds per clip**. A progress bar that has not moved for half a minute is normal, not a hang.
+**Sizing a script.** Measured on `en-GB-RyanNeural` at `rate: "-8%"` with a 0.5s inter-chunk pause: **149 words per minute of speech, 145 effective**. So multiply your target minutes by about 145 to get the word count you need. Kokoro at `speed: 0.9` runs considerably faster — closer to 215 wpm — so the same script produces a much shorter video. Measure your own once and use that.
+
+**Encoding dominates, and it is slow by design.** Each still is upscaled hugely before the zoom is applied — that is what stops the pan juddering — so budget **25–30 seconds per clip**. A progress bar that has not moved for half a minute is normal, not a hang. Encoding scales linearly with length, so a 50-minute video is a 3–4 hour render; start those when the machine is otherwise free.
 
 **Cost.** Effectively zero. Pexels, Pixabay and the YouTube API are free at this volume, and one batched Gemini call per video sits inside the free tier. The real costs are your electricity and your time. `edge` TTS is free but see the licensing note above; `kokoro` is free and local.
 
@@ -391,6 +433,8 @@ Everything tunable is in [`config.yaml`](config.yaml), commented inline:
 - **qc** — thresholds for each check
 - **dry_run** — how short the validation video is
 
+Two settings do more than their size suggests. `images.query_suffix` and the `grade` block together are most of what makes disparate stock photography look like one film — a consistent search bias plus a consistent colour grade will do more for the finished look than better keywords will.
+
 Secrets never go in `config.yaml`. They live in `.env`.
 
 ---
@@ -401,15 +445,15 @@ Stated honestly, because they will affect you.
 
 **Gemini keyword extraction needs a working API key.** Stage 1 makes one batched call to turn your paragraphs into stock-photo search terms. If the key is missing, out of quota, or the project is blocked, that call fails and the pipeline continues on the fallback below.
 
-**The heuristic fallback is crude.** It maps trigger words in your narration onto a fixed table of photographable phrases ("regulator" → "government office building"), topping up from a small rotating pool of generic imagery. It is hand-written, English-only, and biased toward the finance and current-affairs vocabulary it was built against. **On other subject matter it will drift to the generic pool and your imagery will be repetitive and only loosely related.** It exists so an API outage degrades to a watchable video instead of failing the run — it is not a substitute for the real thing. If you work in a different subject area, extend the table in `script.py`.
+**The heuristic fallback is crude.** It maps trigger words in your narration onto a fixed table of photographable phrases ("regulator" → "government office building"), topping up from a small rotating pool of generic imagery. It is hand-written, English-only, and biased toward the finance and current-affairs vocabulary it was built against. **On other subject matter it will drift to the generic pool and your imagery will be repetitive and only loosely related.** It exists so an API outage degrades to a watchable video instead of failing the run — it is not a substitute for the real thing. If you work in a different subject area, extend the table in `script.py`; the repetition problem gets worse with length, so check repeat counts as well as fall-through rate on anything over about 40 chunks.
 
 **It assumes British English and UK stock imagery.** The default voices are British, the publish schedule is `Europe/London`, image searches lean UK, and the keyword table is full of British institutions. Configurable, but you will be editing more than one line.
 
 **Only tested on Windows.** Developed and exercised on Windows 11. The code is plain Python and ffmpeg with nothing knowingly platform-specific, and the macOS/Linux instructions above are correct as far as they go — but they have not been run end to end. Treat non-Windows as unverified, and please open an issue if you hit something.
 
-**Image relevance is bounded by stock search.** Even with perfect keywords you are getting generic stock photography, and it looks like generic stock photography.
+**Image relevance is bounded by stock search.** Even with perfect keywords you are getting generic stock photography, and it looks like generic stock photography. For anything argument-led, expect to make your own chart cards and drop them in.
 
-**No resume within a stage.** `render.py` clears and rebuilds every clip on each run, so a render interrupted at clip 60 of 70 restarts from clip 1.
+**No resume within a stage.** `render.py` clears and rebuilds every clip on each run, so a render interrupted at clip 60 of 70 restarts from clip 1. On a long video that is hours. This is the most worthwhile thing anyone could contribute.
 
 **`edge` TTS depends on an undocumented endpoint** that is not licensed for commercial use. See [Choosing a TTS backend](#choosing-a-tts-backend).
 
@@ -419,7 +463,7 @@ Stated honestly, because they will affect you.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md). If you are looking for somewhere useful to start: render checkpointing, a keyword table for a non-finance subject area, or simply running the macOS or Linux instructions end to end and reporting what broke.
 
 ## Licence
 
