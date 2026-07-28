@@ -1,5 +1,10 @@
 # Faceless video pipeline
 
+First of all to see our results you can checkout https://www.youtube.com/@Clara-Studios to see the end product, we create finance stories, documentaries ect. TTS is Edge as we think it sounds better.
+
+This was made with the help of claude code, bare in mind claude is an ai and can make mistakes (especially security) 
+
+
 Takes a script **you wrote** and turns it into a narrated 1080p video — text-to-speech narration, stock photos with a slow Ken Burns pan, a colour grade, automated quality checks — then uploads it to YouTube as a private, scheduled video. It is six small Python programs chained together by one command.
 
 **It does not write scripts.** There is no content generation anywhere in this tool. You write the words; the pipeline reads them aloud and finds pictures. If you are looking for something that invents videos for you, this is not it.
