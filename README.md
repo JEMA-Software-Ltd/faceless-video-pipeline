@@ -536,6 +536,16 @@ and honour `Retry-After`.
 
 ---
 
+## How this was built
+
+Parts of this codebase were written with AI assistance (Claude), and some commits carry a `Co-Authored-By` trailer to that effect. **It is not an AI-generated project.** The design, the architecture, the decisions about what the tool should and shouldn't do, and every script ever run through it are human work. The AI contribution is implementation and iteration against that direction, reviewed and tested by a person before it landed.
+
+Worth saying plainly because the distinction matters twice over here. It matters for the code: nothing in this repository is unreviewed generated output, and the limitations section above is an honest account of what has and hasn't been exercised rather than a generated boilerplate list. And it matters for the thing the tool produces — a pipeline that narrates and illustrates scripts *you* wrote would be a strange place to pretend authorship doesn't matter.
+
+If you use this, the same applies to you. The pipeline handles the mechanical work. It doesn't make the video yours; writing it does.
+
+---
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). If you are looking for somewhere useful to start: render checkpointing, a keyword table for a non-finance subject area, or simply running the macOS or Linux instructions end to end and reporting what broke.
