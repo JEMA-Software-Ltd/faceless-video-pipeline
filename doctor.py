@@ -189,6 +189,7 @@ def main() -> int:
     for module, pip_name in (
         ("yaml", "PyYAML"), ("requests", "requests"),
         ("dotenv", "python-dotenv"), ("PIL", "Pillow"),
+        ("matplotlib", "matplotlib"),
         ("soundfile", "soundfile"),
         ("googleapiclient", "google-api-python-client"),
         ("google_auth_oauthlib", "google-auth-oauthlib"),

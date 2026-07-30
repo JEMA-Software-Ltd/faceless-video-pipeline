@@ -11,6 +11,9 @@ video:
   seconds_per_image: 10
   min_seconds_per_image: 8
   max_seconds_per_image: 12
+  # Deterministic per-image timing variation. 0 preserves equal splits;
+  # 0.3 permits up to +/-30%, while render.py still clamps shots to 4..15s.
+  pace_variation: 0.0
   # x264 knobs for the per-clip encode (the only encode that happens; the
   # concat + final mux both copy the video stream).
   crf: 20
@@ -101,6 +104,42 @@ captions:
   border_colour: black
   bottom_margin: 90
   max_chars_per_line: 48
+
+audio:
+  # Final-mux audio polish. The master switch is OFF by default.
+  enabled: false
+  normalise: true
+  compress: true
+  target_lufs: -16
+  highpass_hz: 80
+  presence_hz: 3000
+  presence_gain_db: 2
+  # Optional user-supplied, properly licensed music. No track is bundled or
+  # selected by the pipeline, and this empty path leaves the branch inactive.
+  music_path: ""
+  music_gain_db: -26
+  duck_db: -3
+
+overlays:
+  # Spoken-number overlays. Disabled preserves the existing visual render.
+  enabled: false
+  max_per_chunk: 1
+  font_size: 96
+  duration: 2.5
+
+charts:
+  # Candidate generation is standalone; charts are not wired into render.py.
+  enabled: false
+  max_per_video: 6
+  min_ratio: 1.5
+
+clips:
+  # Standalone vertical-clip stage. Disabled keeps existing runs unchanged.
+  enabled: false
+  count: 6
+  min_seconds: 15
+  max_seconds: 55
+  force_chunks: []
 
 upload:
   privacy: private          # Always private; publishAt controls going live.
