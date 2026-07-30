@@ -56,9 +56,14 @@ scripts/2026-07-28.md          ← you write this
 | 1 | `script.py` | Reads your markdown. The `# Heading` becomes the title, HTML comments become description and tags, and each blank-line-separated paragraph becomes a **chunk**. Uses a small local model for stock-photo search terms when enabled, with a deterministic heuristic fallback. |
 | 2 | `tts.py` | Narrates each chunk to `audio/000.wav`, `001.wav`… Appends a configurable pause, then measures the real duration off disk and records it. Every later stage times itself from that measurement. |
 | 3 | `images.py` | Works out how many images each chunk needs (one per 8–12 seconds of its measured audio), searches Pexels then Pixabay, downloads them. |
-| 4 | `render.py` | Renders each still to its own short clip with a slow zoom, applies the colour grade, then joins the clips and muxes the narration. The video is encoded exactly once. |
+| 4 | `render.py` | Renders each still to a checkpointed clip with deterministic pacing, applies the colour grade and optional number overlays, then joins the clips and polishes narration at the final mux. |
 | 5 | `qc.py` | Checks audio and video lengths match, no long black segments, no dead single-colour frames, plausible bitrate. Exits non-zero on failure, which stops the pipeline before upload. |
 | 6 | `upload.py` | Uploads via the YouTube Data API. **Always private**, with a scheduled publish time. |
+
+Two optional, standalone offline stages operate on an existing work directory:
+`clips.py` creates six selected 1080×1920 excerpts from existing audio and
+imagery, while `charts.py` generates source-verified chart-card PNG candidates
+for review. Chart candidates are deliberately not inserted into a render.
 
 Plus `doctor.py` (checks your setup before you waste an hour) and `get_token.py` (one-off YouTube sign-in).
 
@@ -394,6 +399,14 @@ python qc.py      --date 2026-07-28
 python upload.py  --date 2026-07-28
 ```
 
+Optional offline outputs, after the main assets exist:
+
+```bash
+# First set the corresponding enabled flag in config.yaml.
+python clips.py --date 2026-07-28
+python charts.py --date 2026-07-28
+```
+
 ### Re-running a single stage
 
 Any stage can be re-run on its own with the same flags. This is how you recover from a failure without redoing everything:
@@ -403,11 +416,15 @@ python render.py --date 2026-07-28
 python qc.py     --date 2026-07-28
 ```
 
-**Stages skip work that is already done.** `tts.py` skips chunks that already have audio and a measured duration; `images.py` skips chunks that already have enough images on disk. To force them to redo it:
+**Stages skip work that is already done.** `tts.py` skips chunks that already
+have audio and a measured duration; `images.py` skips chunks that already have
+enough images on disk; and `render.py` reuses non-empty clips whose duration and
+config fingerprint match. To force them to redo it:
 
 ```bash
 python tts.py    --date 2026-07-28 --force
 python images.py --date 2026-07-28 --force
+python render.py --date 2026-07-28 --force
 ```
 
 > ⚠️ **`script.py` is the exception.** It rewrites `chunks.json` from scratch, discarding measured durations and image paths. Re-running the whole pipeline after a late failure therefore redoes all the narration and re-downloads every image. If only render/qc/upload failed, run those three directly instead.
@@ -451,12 +468,16 @@ electricity and your time. `edge` TTS is free but see the licensing note above;
 
 Everything tunable is in [`config.yaml`](config.yaml), commented inline:
 
-- **video** — resolution, frame rate, x264 quality, Ken Burns pacing
+- **video** — resolution, frame rate, x264 quality, Ken Burns pacing, and deterministic per-image pace variation
 - **tts** — backend, voice, rate, and the pause inserted after each chunk
 - **llm** — enable/disable the local model, Ollama host/model, timeout, context, retries, and keywords per chunk
 - **images** — results per query, orientation, minimum size, and `query_suffix` (appended to every search to bias the whole video toward one look)
 - **grade** — colour grade: saturation/contrast/gamma, shadow tint, vignette. Set `enabled: false` to skip it entirely
 - **captions** — burned-in subtitles, off by default
+- **audio** — final-mux narration normalisation, compression/EQ, and an optional user-supplied music path
+- **overlays** — one late-biased, source-parsed spoken figure per chunk
+- **clips** — vertical-clip count, 15–55 second window, and optional forced chunk indices
+- **charts** — scratch chart-card limit and minimum comparison ratio; never enables render insertion
 - **upload** — privacy, publish time, timezone, category, tags, default description
 - **qc** — thresholds for each check
 - **dry_run** — how short the validation video is
@@ -486,13 +507,32 @@ trying a different model.
 
 **Image relevance is bounded by stock search.** Even with perfect keywords you are getting generic stock photography, and it looks like generic stock photography. For anything argument-led, expect to make your own chart cards and drop them in.
 
-**No resume within a stage.** `render.py` clears and rebuilds every clip on each run, so a render interrupted at clip 60 of 70 restarts from clip 1. On a long video that is hours. This is the most worthwhile thing anyone could contribute.
+**Vertical crops are blunt.** `clips.py` centre-crops landscape stills to 9:16.
+That avoids reach-killing black bars, but typically retains only about a third
+of a 16:9 image's width and cannot know whether the subject was off-centre.
+
+**Automatic figures are deliberately conservative.** Overlays and charts parse
+explicit English number phrases only. Chart candidates additionally need clear
+comparison language, matching units, a large enough ratio, and source-span
+verification. Ambiguous candidates are dropped.
+
+**Music is bring-your-own and currently unverified.** The final-mux branch can
+mix and side-chain a configured local track, but no track is bundled, selected,
+downloaded, or licensed by this project; the empty default path leaves it off.
 
 **`edge` TTS depends on an undocumented endpoint** that is not licensed for commercial use. See [Choosing a TTS backend](#choosing-a-tts-backend).
 
 **Only official APIs are used** — Ollama's local API plus the Pexels and Pixabay
 search endpoints, no scraping. Remote HTTP calls retry with exponential backoff
 and honour `Retry-After`.
+
+### Planned, not implemented
+
+- Finish and live-model-test the disabled Ollama keyword backend.
+- Evaluate stock video as an alternative to stills; this would substantially
+  increase downloads and storage.
+- Choose, license, and validate music. The code accepts a user-supplied local
+  path, but the project will not pick or download a track.
 
 ---
 
