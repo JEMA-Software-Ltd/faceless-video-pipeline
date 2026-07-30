@@ -47,12 +47,18 @@ tts:
   # the padded audio and cannot drift. 0 disables padding.
   pause_after_chunk: 0.5
 
-gemini:
-  # Model used only to extract visual search keywords per chunk. Any current
-  # Gemini flash/flash-lite model works; list what your key can reach with
-  # `client.models.list()`. If the call fails for any reason, script.py falls
-  # back to heuristic keywords (see README — the fallback is crude).
-  model: gemini-2.5-flash-lite
+llm:
+  # Local production-assistance model. It only makes production decisions
+  # (currently stock-search keywords); it never writes or edits narration.
+  # Every use has a deterministic heuristic fallback, so a stopped Ollama
+  # service or missing model reduces quality but never stops the pipeline.
+  enabled: false
+  backend: ollama
+  host: http://localhost:11434
+  model: qwen3.5:4b
+  timeout_seconds: 120
+  context: 4096
+  max_retries: 2
   keywords_per_chunk: 3
 
 images:

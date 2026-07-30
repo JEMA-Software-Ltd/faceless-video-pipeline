@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import common
+import llm
 
 
 # A check returns (status, detail). status is one of PASS / FAIL / WARN.
@@ -155,6 +156,18 @@ def check_config() -> tuple[str, str]:
         return FAIL, f"config.yaml problem: {exc}"
 
 
+def check_ollama(config: dict, log) -> tuple[str, str]:
+    """Report local-model readiness without making an inference call."""
+    client = llm.OllamaClient(config, log)
+    status = client.check_status()
+    enabled = client.settings.enabled
+    prefix = "enabled" if enabled else "disabled by config"
+    detail = f"{prefix}; {status.detail}"
+    if not enabled:
+        return WARN, detail
+    return (PASS if status.ready else FAIL), detail
+
+
 def main() -> int:
     log = common.get_logger("doctor")
     print("\nPipeline preflight (doctor.py)\n" + "=" * 60)
@@ -176,7 +189,7 @@ def main() -> int:
     for module, pip_name in (
         ("yaml", "PyYAML"), ("requests", "requests"),
         ("dotenv", "python-dotenv"), ("PIL", "Pillow"),
-        ("soundfile", "soundfile"), ("google.genai", "google-genai"),
+        ("soundfile", "soundfile"),
         ("googleapiclient", "google-api-python-client"),
         ("google_auth_oauthlib", "google-auth-oauthlib"),
     ):
@@ -189,6 +202,10 @@ def main() -> int:
         _cfg_for_tts = common.load_config()
     except Exception:
         _cfg_for_tts = {}
+
+    # A disabled optional model is a visible warning. Once enabled, both the
+    # service and configured model are hard preflight requirements.
+    rows.append(("Ollama LLM", *check_ollama(_cfg_for_tts, log)))
 
     # TTS backends. Both are reported regardless of which is selected, so a
     # fallback that has quietly rotted is visible before you need it.

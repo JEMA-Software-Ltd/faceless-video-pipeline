@@ -53,7 +53,7 @@ scripts/2026-07-28.md          ← you write this
 
 | # | Stage | What it actually does |
 |---|-------|----------------------|
-| 1 | `script.py` | Reads your markdown. The `# Heading` becomes the title, HTML comments become description and tags, and each blank-line-separated paragraph becomes a **chunk**. Asks Gemini for a few stock-photo search terms per chunk. |
+| 1 | `script.py` | Reads your markdown. The `# Heading` becomes the title, HTML comments become description and tags, and each blank-line-separated paragraph becomes a **chunk**. Uses a small local model for stock-photo search terms when enabled, with a deterministic heuristic fallback. |
 | 2 | `tts.py` | Narrates each chunk to `audio/000.wav`, `001.wav`… Appends a configurable pause, then measures the real duration off disk and records it. Every later stage times itself from that measurement. |
 | 3 | `images.py` | Works out how many images each chunk needs (one per 8–12 seconds of its measured audio), searches Pexels then Pixabay, downloads them. |
 | 4 | `render.py` | Renders each still to its own short clip with a slow zoom, applies the colour grade, then joins the clips and muxes the narration. The video is encoded exactly once. |
@@ -73,9 +73,11 @@ Install these first. Links go to the official downloads.
 | **Python 3.11 or newer** | runs everything | [python.org/downloads](https://www.python.org/downloads/) |
 | **ffmpeg** (includes ffprobe) | all video and audio work | [ffmpeg.org/download.html](https://ffmpeg.org/download.html) |
 | **git** | to download this repo | [git-scm.com/downloads](https://git-scm.com/downloads) |
+| **Ollama** | planned local production decisions; experimental backend currently disabled | [ollama.com/download](https://ollama.com/download) |
 | **espeak-ng** | *only* if you use the Kokoro TTS backend | [github.com/espeak-ng/espeak-ng/releases](https://github.com/espeak-ng/espeak-ng/releases) |
 
-You do not need espeak-ng if you use the default `edge` TTS backend.
+You do not need Ollama while `llm.enabled` is false, and you do not need
+espeak-ng if you use the default `edge` TTS backend.
 
 ---
 
@@ -219,8 +221,28 @@ Sign up at [pexels.com/api](https://www.pexels.com/api/), create a key, paste in
 ### Pixabay — stock images fallback (free)
 Sign up at [pixabay.com/api/docs](https://pixabay.com/api/docs/), paste into `PIXABAY_API_KEY`. Used only when Pexels returns too few results.
 
-### Google AI Studio — Gemini, for image keywords (free tier)
-Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey), paste into `GEMINI_API_KEY`. The pipeline makes **one** batched call per video, so free-tier limits are ample.
+### Ollama — experimental work in progress
+
+An experimental backend exists for running production-assistance decisions
+locally. It is not a script writer: narration remains exactly the markdown you
+supplied. Its first planned use is choosing concrete stock-library search terms.
+
+**This path is disabled by default and has not been tested against a live
+model.** Model installation and quality validation are deliberately deferred.
+Until that work is complete, leave `llm.enabled: false`; Stage 1 then takes the
+same deterministic heuristic path as before this backend was added.
+
+The intended model, once validation resumes, is:
+
+```bash
+ollama pull qwen3.5:4b
+```
+
+The host, model, 4096-token context, timeout, and retry count are configurable
+in the `llm` block. If an enabled backend is stopped, the model is absent, a
+request times out, or output fails validation, the affected work falls back to
+the deterministic heuristic and the pipeline completes. `doctor.py` reports a
+disabled LLM as a warning and an enabled-but-unavailable LLM as a failure.
 
 > Check which models still carry a free tier before you set `gemini.model` — the free/paid split has moved more than once, and a model name that is merely *visible* to your key is not necessarily one you can call. A `429` with `limit: 0`, or a `403 PERMISSION_DENIED`, means that model is not free on your project. Flash and Flash-Lite tier models are the usual safe choice; keyword extraction is trivial work and does not need anything larger.
 
@@ -293,7 +315,8 @@ All three are gitignored. So is `work/`, `logs/`, and everything in `scripts/` e
 
 If a chunk fails on `edge` after its retries, the stage **stops** rather than falling back to Kokoro — swapping synthesiser mid-run would change the narrator's voice partway through the finished video. Re-run `tts.py` to resume; completed chunks are skipped.
 
-`python doctor.py` checks both backends every run, and verifies `tts.edge_voice` against the live voice list.
+`python doctor.py` checks Ollama and both TTS backends every run, and verifies
+`tts.edge_voice` against the live voice list.
 
 ---
 
@@ -305,7 +328,9 @@ If a chunk fails on `edge` after its retries, the stage **stops** rather than fa
 python doctor.py
 ```
 
-It verifies ffmpeg, ffprobe, espeak-ng, every Python package, every `.env` key, both TTS backends, and that `work/` is writable. Output looks like this:
+It verifies ffmpeg, ffprobe, espeak-ng, every Python package, every `.env` key,
+Ollama/model readiness, both TTS backends, and that `work/` is writable. Output
+looks like this:
 
 ```
 Pipeline preflight (doctor.py)
@@ -413,7 +438,10 @@ Rough numbers from real runs on an ordinary desktop CPU, no GPU.
 
 **Encoding dominates, and it is slow by design.** Each still is upscaled hugely before the zoom is applied — that is what stops the pan juddering — so budget **25–30 seconds per clip**. A progress bar that has not moved for half a minute is normal, not a hang. Encoding scales linearly with length, so a 50-minute video is a 3–4 hour render; start those when the machine is otherwise free.
 
-**Cost.** Effectively zero. Pexels, Pixabay and the YouTube API are free at this volume, and one batched Gemini call per video sits inside the free tier. The real costs are your electricity and your time. `edge` TTS is free but see the licensing note above; `kokoro` is free and local.
+**Cost.** Effectively zero. Pexels, Pixabay and the YouTube API are free at this
+volume, and the optional production model runs locally. The real costs are your
+electricity and your time. `edge` TTS is free but see the licensing note above;
+`kokoro` and Ollama are free and local.
 
 **Disk.** Each run keeps its clips, images, audio and video under `work/<date>/`. Budget 1–2 GB per video and clear out old dates yourself.
 
@@ -425,7 +453,7 @@ Everything tunable is in [`config.yaml`](config.yaml), commented inline:
 
 - **video** — resolution, frame rate, x264 quality, Ken Burns pacing
 - **tts** — backend, voice, rate, and the pause inserted after each chunk
-- **gemini** — model and keywords per chunk
+- **llm** — enable/disable the local model, Ollama host/model, timeout, context, retries, and keywords per chunk
 - **images** — results per query, orientation, minimum size, and `query_suffix` (appended to every search to bias the whole video toward one look)
 - **grade** — colour grade: saturation/contrast/gamma, shadow tint, vignette. Set `enabled: false` to skip it entirely
 - **captions** — burned-in subtitles, off by default
@@ -443,7 +471,12 @@ Secrets never go in `config.yaml`. They live in `.env`.
 
 Stated honestly, because they will affect you.
 
-**Gemini keyword extraction needs a working API key.** Stage 1 makes one batched call to turn your paragraphs into stock-photo search terms. If the key is missing, out of quota, or the project is blocked, that call fails and the pipeline continues on the fallback below.
+**Local-model quality is bounded by model size.** The default `qwen3.5:4b`
+model is chosen to be practical on a CPU-only machine. Stage 1 constrains its
+output to structured JSON and rejects malformed, repeated, overly long, or
+abstract search terms, but a small model can still make less relevant choices
+than a larger one. Keep the fallback enabled and review keyword logs when
+trying a different model.
 
 **The heuristic fallback is crude.** It maps trigger words in your narration onto a fixed table of photographable phrases ("regulator" → "government office building"), topping up from a small rotating pool of generic imagery. It is hand-written, English-only, and biased toward the finance and current-affairs vocabulary it was built against. **On other subject matter it will drift to the generic pool and your imagery will be repetitive and only loosely related.** It exists so an API outage degrades to a watchable video instead of failing the run — it is not a substitute for the real thing. If you work in a different subject area, extend the table in `script.py`; the repetition problem gets worse with length, so check repeat counts as well as fall-through rate on anything over about 40 chunks.
 
@@ -457,7 +490,9 @@ Stated honestly, because they will affect you.
 
 **`edge` TTS depends on an undocumented endpoint** that is not licensed for commercial use. See [Choosing a TTS backend](#choosing-a-tts-backend).
 
-**Only official APIs are used** — Pexels and Pixabay search endpoints, no scraping. All HTTP calls retry with exponential backoff and honour `Retry-After`.
+**Only official APIs are used** — Ollama's local API plus the Pexels and Pixabay
+search endpoints, no scraping. Remote HTTP calls retry with exponential backoff
+and honour `Retry-After`.
 
 ---
 

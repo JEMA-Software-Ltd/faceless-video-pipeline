@@ -76,7 +76,6 @@ CHUNKS_FILENAME = "chunks.json"
 # non-empty. FONT_PATH is only strictly required when burned-in captions are
 # enabled, so it is tracked separately.
 REQUIRED_ENV_KEYS = [
-    "GEMINI_API_KEY",
     "PEXELS_API_KEY",
     "PIXABAY_API_KEY",
     "YOUTUBE_CLIENT_ID",

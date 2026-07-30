@@ -3,8 +3,8 @@
 script.py — stage 1 of 6.
 
 Reads a hand-written markdown script (scripts/<date>.md), splits it into
-paragraph-sized narration chunks, asks Gemini for a few concrete stock-image
-search keywords per chunk, and writes work/<date>/chunks.json.
+paragraph-sized narration chunks, asks a local model for a few concrete
+stock-image search keywords per chunk, and writes work/<date>/chunks.json.
 
 This stage does NOT generate scripts — you write those by hand. It only parses
 and enriches them.
@@ -25,12 +25,12 @@ Later stages append audio_file/duration/images to each chunk.
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
 
 import common
+import llm
 
 
 # --- markdown parsing -------------------------------------------------------
@@ -96,59 +96,6 @@ def truncate_text(text: str, max_chars: int) -> str:
     # Otherwise the last word boundary.
     idx = window.rfind(" ")
     return (window[:idx] if idx > 0 else window).strip() + "."
-
-
-# --- Gemini keyword extraction ---------------------------------------------
-
-def extract_keywords_gemini(paragraphs: list[str], cfg: dict, log) -> list[list[str]]:
-    """One batched Gemini call: returns a list of keyword lists, aligned to
-    `paragraphs`. Raises on failure; caller decides whether to fall back."""
-    from google import genai  # imported lazily so doctor/other stages don't need it
-
-    api_key = common.get_env("GEMINI_API_KEY")
-    model = cfg.get("gemini", {}).get("model", "gemini-2.0-flash")
-    n = int(cfg.get("gemini", {}).get("keywords_per_chunk", 3))
-
-    numbered = "\n".join(f"[{i}] {p}" for i, p in enumerate(paragraphs))
-    prompt = (
-        "You pick concrete, visually-searchable stock-photo keywords for an "
-        "educational UK personal-finance slideshow video.\n"
-        f"For each numbered paragraph below, give {max(2, n)} short keyword "
-        "phrases (1-3 words each) naming imagery a stock library would return "
-        "well — concrete nouns and scenes (e.g. 'piggy bank', 'london terraced "
-        "houses', 'coins jar', 'person budgeting laptop'). Avoid abstract words "
-        "like 'wealth' or 'success'.\n"
-        "Return ONLY a JSON array where element i is an array of strings for "
-        "paragraph i. No prose, no code fences.\n\n"
-        f"{numbered}"
-    )
-
-    client = genai.Client(api_key=api_key)
-    # NOTE (verify tomorrow): with google-genai, the plain text response is
-    # `response.text`. We strip any accidental ```json fences before parsing.
-    last_exc = None
-    for attempt in range(1, 4):
-        try:
-            response = client.models.generate_content(model=model, contents=prompt)
-            raw = (response.text or "").strip()
-            raw = re.sub(r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE).strip()
-            data = json.loads(raw)
-            if not isinstance(data, list):
-                raise ValueError("expected a JSON array")
-            out: list[list[str]] = []
-            for item in data:
-                if isinstance(item, list):
-                    out.append([str(k).strip() for k in item if str(k).strip()][:max(2, n)])
-                else:
-                    out.append([str(item).strip()])
-            # Pad/trim to match paragraph count.
-            while len(out) < len(paragraphs):
-                out.append([])
-            return out[: len(paragraphs)]
-        except Exception as exc:  # network / parse / API error
-            last_exc = exc
-            log.warning("Gemini keyword attempt %d/3 failed: %s", attempt, exc)
-    raise RuntimeError(f"Gemini keyword extraction failed: {last_exc}")
 
 
 # Trigger word (matched whole-word, case-insensitive) -> a short phrase a stock
@@ -658,7 +605,7 @@ _PROPER_NOUN_RE = re.compile(r"\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){1,3})\b")
 
 
 def heuristic_keywords(paragraph: str, n: int, index: int = 0) -> list[str]:
-    """Offline fallback used when Gemini is unavailable.
+    """Offline fallback used when the local model is unavailable.
 
     Deliberately NOT a bag-of-words pick: raw salient words out of this kind of
     narration ("where", "obvious", "weren") are abstract or broken tokens and
@@ -702,6 +649,61 @@ def heuristic_keywords(paragraph: str, n: int, index: int = 0) -> list[str]:
     return picked[:max(1, n)]
 
 
+# --- local-model keyword extraction ----------------------------------------
+
+def extract_keywords_llm(paragraphs: list[str], cfg: dict, log) -> list[list[str]]:
+    """Return one keyword list per paragraph, falling back item by item."""
+    llm_cfg = cfg.get("llm", {}) or {}
+    n = min(3, max(2, int(llm_cfg.get("keywords_per_chunk", 3))))
+    client = llm.OllamaClient(cfg, log)
+
+    if not client.settings.enabled:
+        log.info("Local keyword model disabled; using heuristic keywords.")
+        return [heuristic_keywords(p, n, i) for i, p in enumerate(paragraphs)]
+
+    status = client.check_status()
+    if not status.ready:
+        log.warning(
+            "%s — using heuristic keywords for every chunk.", status.detail
+        )
+        return [heuristic_keywords(p, n, i) for i, p in enumerate(paragraphs)]
+
+    log.info(
+        "Local keyword model ready: %s at %s",
+        client.settings.model,
+        client.settings.host,
+    )
+    keyword_lists: list[list[str]] = []
+    model_count = fallback_count = 0
+    for index, paragraph in enumerate(paragraphs):
+        recent = [
+            keyword
+            for keywords in keyword_lists[max(0, index - 3):index]
+            for keyword in keywords
+        ]
+        try:
+            keywords = client.keywords_for_chunk(paragraph, recent, count=n)
+            model_count += 1
+        except llm.LLMError as exc:
+            keywords = heuristic_keywords(paragraph, n, index)
+            fallback_count += 1
+            log.warning(
+                "Chunk %03d: local model unavailable or invalid (%s); "
+                "using heuristic keywords: %s",
+                index,
+                exc,
+                ", ".join(keywords),
+            )
+        keyword_lists.append(keywords)
+
+    log.info(
+        "Keyword source summary: local model %d chunk(s), heuristic fallback %d.",
+        model_count,
+        fallback_count,
+    )
+    return keyword_lists
+
+
 # --- main -------------------------------------------------------------------
 
 def main() -> int:
@@ -734,15 +736,12 @@ def main() -> int:
         log.info("DRY-RUN: using %d chunk(s), truncated to <=%d chars each",
                  len(paragraphs), cap)
 
-    # Keywords via Gemini, with an offline heuristic fallback on hard failure.
-    n_kw = int(ctx.config.get("gemini", {}).get("keywords_per_chunk", 3))
-    try:
-        keyword_lists = extract_keywords_gemini(paragraphs, ctx.config, log)
-    except Exception as exc:
-        log.error("Gemini unavailable (%s) — falling back to heuristic keywords. "
-                  "Image relevance will be lower for this run.", exc)
-        keyword_lists = [heuristic_keywords(p, n_kw, i)
-                         for i, p in enumerate(paragraphs)]
+    # Local model per chunk, with an offline heuristic fallback on any failure.
+    n_kw = min(
+        3,
+        max(2, int(ctx.config.get("llm", {}).get("keywords_per_chunk", 3))),
+    )
+    keyword_lists = extract_keywords_llm(paragraphs, ctx.config, log)
 
     # Ensure every chunk has at least one keyword.
     for i, kws in enumerate(keyword_lists):
