@@ -9,8 +9,8 @@ You can see the end product at [youtube.com/@Clara-Studios](https://www.youtube.
 ### A few notes from actually using it
 
 - **We do not upload via the API.** We take the finished file out of `work/` and upload it by hand, so there is a full human check before anything reaches the channel. `upload.py` exists and works, but we would recommend the manual route for anything you care about.
-- **Edge is the default TTS** because we think it sounds better than the local option. Read [Choosing a TTS backend](#choosing-a-tts-backend) before you commit to it — there is a licensing catch.
-- **This was built with Claude Code.** Bear in mind an AI wrote most of it and can make mistakes, particularly around security. Read [Security notes](#security-notes) and satisfy yourself before you point it at credentials that matter.
+- **ElevenLabs is the default TTS** and it is a paid service — roughly one credit per character, so about £2–4 per video. Two free backends remain available. Read [Choosing a TTS backend](#choosing-a-tts-backend) before committing either way, because the free ones carry a licensing catch.
+- **This was built with AI assistance.** Bear in mind an AI wrote much of the implementation and can make mistakes, particularly around security. Read [Security notes](#security-notes) and satisfy yourself before pointing it at credentials that matter.
 - **Renders are long.** Handing the terminal commands to an AI agent and coming back later works well, and is how most of these videos got made.
 
 ---
@@ -27,6 +27,7 @@ This tool removes the *mechanical* work — recording, sourcing images, timing c
 
 - **Not a script writer.** You write every word.
 - **Not a spam tool.** See above.
+- **Not free by default.** The default TTS backend bills per character. Free alternatives are documented below.
 - **Not neutral about accents.** Defaults are British English narration and UK-leaning stock imagery and publish times. All configurable, none neutral out of the box.
 - **Not tested outside Windows.** It is plain Python and ffmpeg and should work anywhere, but only Windows has actually been exercised. See [Known limitations](#known-limitations).
 
@@ -53,17 +54,14 @@ scripts/2026-07-28.md          ← you write this
 
 | # | Stage | What it actually does |
 |---|-------|----------------------|
-| 1 | `script.py` | Reads your markdown. The `# Heading` becomes the title, HTML comments become description and tags, and each blank-line-separated paragraph becomes a **chunk**. Uses a small local model for stock-photo search terms when enabled, with a deterministic heuristic fallback. |
+| 1 | `script.py` | Reads your markdown. The `# Heading` becomes the title, HTML comments become description and tags, and each blank-line-separated paragraph becomes a **chunk**. Picks stock-photo search terms using a deterministic heuristic table, or a local model when enabled. |
 | 2 | `tts.py` | Narrates each chunk to `audio/000.wav`, `001.wav`… Appends a configurable pause, then measures the real duration off disk and records it. Every later stage times itself from that measurement. |
 | 3 | `images.py` | Works out how many images each chunk needs (one per 8–12 seconds of its measured audio), searches Pexels then Pixabay, downloads them. |
-| 4 | `render.py` | Renders each still to a checkpointed clip with deterministic pacing, applies the colour grade and optional number overlays, then joins the clips and polishes narration at the final mux. |
+| 4 | `render.py` | Renders each still to a checkpointed clip with deterministic pace variation, applies the colour grade and optional number overlays, then joins the clips and polishes the narration at the final mux. |
 | 5 | `qc.py` | Checks audio and video lengths match, no long black segments, no dead single-colour frames, plausible bitrate. Exits non-zero on failure, which stops the pipeline before upload. |
 | 6 | `upload.py` | Uploads via the YouTube Data API. **Always private**, with a scheduled publish time. |
 
-Two optional, standalone offline stages operate on an existing work directory:
-`clips.py` creates six selected 1080×1920 excerpts from existing audio and
-imagery, while `charts.py` generates source-verified chart-card PNG candidates
-for review. Chart candidates are deliberately not inserted into a render.
+Two optional standalone stages operate on an existing work directory. `clips.py` produces six selected 1080×1920 vertical excerpts from audio and imagery already on disk. `charts.py` generates source-verified chart-card PNG candidates for review — deliberately *not* inserted into a render.
 
 Plus `doctor.py` (checks your setup before you waste an hour) and `get_token.py` (one-off YouTube sign-in).
 
@@ -71,18 +69,15 @@ Plus `doctor.py` (checks your setup before you waste an hour) and `get_token.py`
 
 ## Prerequisites
 
-Install these first. Links go to the official downloads.
-
 | What | Why | Where |
 |---|---|---|
 | **Python 3.11 or newer** | runs everything | [python.org/downloads](https://www.python.org/downloads/) |
 | **ffmpeg** (includes ffprobe) | all video and audio work | [ffmpeg.org/download.html](https://ffmpeg.org/download.html) |
 | **git** | to download this repo | [git-scm.com/downloads](https://git-scm.com/downloads) |
-| **Ollama** | planned local production decisions; experimental backend currently disabled | [ollama.com/download](https://ollama.com/download) |
-| **espeak-ng** | *only* if you use the Kokoro TTS backend | [github.com/espeak-ng/espeak-ng/releases](https://github.com/espeak-ng/espeak-ng/releases) |
+| **espeak-ng** | *only* for the Kokoro TTS backend | [github.com/espeak-ng/espeak-ng/releases](https://github.com/espeak-ng/espeak-ng/releases) |
+| **Ollama** | *only* for the experimental local-model keyword backend, disabled by default | [ollama.com/download](https://ollama.com/download) |
 
-You do not need Ollama while `llm.enabled` is false, and you do not need
-espeak-ng if you use the default `edge` TTS backend.
+You need neither espeak-ng nor Ollama for a default run.
 
 ---
 
@@ -129,8 +124,6 @@ You know step 5 worked when your prompt gains a `(.venv)` prefix:
 
 ### macOS (Terminal)
 
-Open **Terminal** (Applications → Utilities → Terminal).
-
 ```bash
 # 1. Install Homebrew if you don't have it
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -173,38 +166,38 @@ pip install -r requirements.txt
 
 ## Windows: problems this project actually hit
 
-These are not hypothetical. Every one of them cost time during development, and they will happen to you too.
+These are not hypothetical. Every one of them cost time during development.
 
 **"Python was not found" and the Microsoft Store opens.**
 Windows ships a fake `python.exe` that does nothing but advertise the Store. If typing `python` opens the Store, that stub is shadowing your real install. Fix it: Start menu → search "Manage app execution aliases" → turn **off** both `python.exe` and `python3.exe`. Then open a new terminal.
 
 **PATH does not refresh in an open terminal.**
-After installing Python, ffmpeg or git, the terminal you installed from still has the *old* PATH. `ffmpeg -version` will keep saying "not recognised" no matter how many times you retry. **Close the window entirely and open a new one.** This is not optional and re-running the installer will not help.
+After installing Python, ffmpeg or git, the terminal you installed from still has the *old* PATH. `ffmpeg -version` will keep saying "not recognised" no matter how many times you retry. **Close the window entirely and open a new one.** Re-running the installer will not help.
 
 **`source .venv/bin/activate` does not work on Windows.**
 That is the macOS/Linux form. On Windows use:
 ```powershell
 .venv\Scripts\activate
 ```
-If PowerShell refuses with an execution-policy error, run:
+If PowerShell refuses with an execution-policy error:
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
 **Every stage suddenly says "PyYAML not installed".**
-Almost always means the virtual environment is not active in that terminal — check your prompt for the `(.venv)` prefix. A new terminal window does not inherit it; you must activate again each time.
+Almost always means the virtual environment is not active in that terminal — check your prompt for the `(.venv)` prefix. A new terminal window does not inherit it.
 
 **`./run.sh` does not run in PowerShell.**
-`run.sh` is a bash script. PowerShell cannot execute it. Either run the six stages individually as `python script.py …` (see [Running it](#running-it)), or use **Git Bash**, which Git for Windows installs — right-click in the project folder → "Git Bash Here" → then `./run.sh` works. Note that typing `bash run.sh` in PowerShell may invoke WSL instead, which will not have your dependencies.
+`run.sh` is a bash script. Either run the stages individually as `python script.py …`, or use **Git Bash**, which Git for Windows installs — right-click in the project folder → "Git Bash Here". Note that typing `bash run.sh` in PowerShell may invoke WSL instead, which will not have your dependencies.
 
 **`ZoneInfoNotFoundError: 'Europe/London'`.**
-Windows has no system timezone database. `upload.py` needs one to schedule the publish time, so without it the pipeline dies **at the very last step, after a full render has already completed**. The `tzdata` package supplies it and is pinned in `requirements.txt` — if you see this error, you skipped `pip install -r requirements.txt` or are running the wrong Python.
+Windows has no system timezone database. `upload.py` needs one to schedule the publish time, so without it the pipeline dies **at the very last step, after a full render has already completed**. The `tzdata` package supplies it and is pinned in `requirements.txt`.
 
 **`UnicodeEncodeError: 'charmap' codec can't encode character '\u2713'`.**
-Windows consoles default to the legacy cp1252 encoding, which cannot print the ✓/✗ in the QC report or the em-dashes in log messages. This used to kill `qc.py` mid-report. It is fixed in `common.py`, which forces UTF-8 on the output streams at import — but if you see it in your own additions, that is the cause.
+Windows consoles default to cp1252, which cannot print the ✓/✗ in the QC report. Fixed in `common.py`, which forces UTF-8 on the output streams at import.
 
 **`PermissionError: [WinError 32]` when render starts.**
-A leftover file handle on a clip from a previous run, usually because a render was killed part-way. Close any player or Explorer preview showing the file, or reboot. Do not kill renders mid-run if you can avoid it.
+A leftover file handle on a clip from a previous run, usually because a render was killed part-way. Close any player or Explorer preview showing the file, or reboot.
 
 **Renders look like they have hung.** They have not. See [What to expect](#what-to-expect).
 
@@ -212,116 +205,123 @@ A leftover file handle on a clip from a previous run, usually because a render w
 
 ## API keys
 
-Copy the template, then fill it in:
-
 ```bash
 cp .env.example .env      # Windows PowerShell: copy .env.example .env
 ```
 
-`.env` is gitignored and must never be committed. Every key below is documented in `.env.example` too.
+`.env` is gitignored and must never be committed.
+
+### ElevenLabs — narration (paid, and the default)
+
+Sign up at [elevenlabs.io](https://elevenlabs.io/), then **profile icon → API Keys → Create**. The key is shown once. Paste into `ELEVENLABS_API_KEY`.
+
+A paid plan is required for commercial use — the free tier grants no commercial rights and requires attribution. Pick a voice from the Voice Library, add it to your own collection, and put its **voice ID** (not its name) into `tts.elevenlabs_voice_id` in `config.yaml`. Shared Voice Library voices must be added to your account before the API will resolve them.
+
+Some community voices carry a credit multiplier set by whoever shared them, so a library voice can cost more per character than a built-in one. Check before committing to one.
 
 ### Pexels — stock images (free)
-Sign up at [pexels.com/api](https://www.pexels.com/api/), create a key, paste into `PEXELS_API_KEY`. Generous limits (25,000 requests/hour), so ordinary use will not hit them.
+Sign up at [pexels.com/api](https://www.pexels.com/api/), paste into `PEXELS_API_KEY`. Generous limits (25,000 requests/hour).
 
 ### Pixabay — stock images fallback (free)
 Sign up at [pixabay.com/api/docs](https://pixabay.com/api/docs/), paste into `PIXABAY_API_KEY`. Used only when Pexels returns too few results.
 
-### Ollama — experimental work in progress
-
-An experimental backend exists for running production-assistance decisions
-locally. It is not a script writer: narration remains exactly the markdown you
-supplied. Its first planned use is choosing concrete stock-library search terms.
-
-**This path is disabled by default and has not been tested against a live
-model.** Model installation and quality validation are deliberately deferred.
-Until that work is complete, leave `llm.enabled: false`; Stage 1 then takes the
-same deterministic heuristic path as before this backend was added.
-
-The intended model, once validation resumes, is:
-
-```bash
-ollama pull qwen3.5:4b
-```
-
-The host, model, 4096-token context, timeout, and retry count are configurable
-in the `llm` block. If an enabled backend is stopped, the model is absent, a
-request times out, or output fails validation, the affected work falls back to
-the deterministic heuristic and the pipeline completes. `doctor.py` reports a
-disabled LLM as a warning and an enabled-but-unavailable LLM as a failure.
-
-> Check which models still carry a free tier before you set `gemini.model` — the free/paid split has moved more than once, and a model name that is merely *visible* to your key is not necessarily one you can call. A `429` with `limit: 0`, or a `403 PERMISSION_DENIED`, means that model is not free on your project. Flash and Flash-Lite tier models are the usual safe choice; keyword extraction is trivial work and does not need anything larger.
-
 ### YouTube — OAuth, for uploading
 
-This is the fiddly one. In order:
+The fiddly one. In order:
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a project.
-2. Enable the **YouTube Data API v3** for it ([direct link](https://console.cloud.google.com/apis/library/youtube.googleapis.com)).
+1. Create a project in the [Google Cloud Console](https://console.cloud.google.com/).
+2. Enable the **YouTube Data API v3** ([direct link](https://console.cloud.google.com/apis/library/youtube.googleapis.com)).
 3. Configure the **OAuth consent screen**. Choose **External**.
 4. **Publish the consent screen.** Do not leave it in "Testing".
-   > ⚠️ **This matters more than anything else on this page.** While the consent screen is in Testing, only accounts on the test-user list can authorise at all — everyone else gets `Error 403: access_denied` — and Google expires refresh tokens after **7 days**. Your uploads will work for a week and then start failing with `invalid_grant`, and the cause is not obvious. Click **Publish App** on the consent screen. You do not need Google verification for your own personal use with the `youtube.upload` scope; you will see an "unverified app" warning at sign-in, and clicking through it is expected.
-5. Credentials → **Create Credentials** → **OAuth client ID** → application type **Desktop app**. Copy the client ID and secret into `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`.
-   > You can also download `client_secret.json`, but this pipeline does not read it. It is gitignored specifically so it cannot end up in a commit.
-6. Run the one-off sign-in. It opens a browser, you approve, and it prints a refresh token:
+   > ⚠️ **This matters more than anything else on this page.** In Testing, only accounts on the test-user list can authorise — everyone else gets `Error 403: access_denied` — and Google expires refresh tokens after **7 days**. Uploads work for a week, then fail with `invalid_grant`, and the cause is not obvious. Click **Publish App**. You do not need Google verification for personal use with the `youtube.upload` scope; the "unverified app" warning at sign-in is expected.
+5. Credentials → **Create Credentials** → **OAuth client ID** → **Desktop app**. Copy the client ID and secret into `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`.
+   > You can also download `client_secret.json`, but this pipeline does not read it. It is gitignored so it cannot end up in a commit.
+6. Run the one-off sign-in:
    ```bash
    python get_token.py
    ```
-   Paste the printed value into `YOUTUBE_REFRESH_TOKEN`. You only do this once.
+   Paste the printed value into `YOUTUBE_REFRESH_TOKEN`. Once only.
 
-> ⚠️ **The Google account you sign in with must already have a YouTube channel.** If it does not, the upload fails with HTTP 401 `youtubeSignupRequired` — after the entire video has rendered. The OAuth is fine in that case; there is simply no channel to upload to. Go to [youtube.com](https://www.youtube.com/), sign in, and create the channel first. If your channel is a **Brand Account**, pick it explicitly at the account-chooser step of `get_token.py` — choosing the personal account instead produces the same error.
+> ⚠️ **The Google account must already have a YouTube channel.** If it does not, upload fails with HTTP 401 `youtubeSignupRequired` — after the entire video has rendered. Create the channel at [youtube.com](https://www.youtube.com/) first. If your channel is a **Brand Account**, pick it explicitly at the account-chooser step of `get_token.py`; choosing the personal account produces the same error.
 
 ### Fonts — only for burned-in captions
-Captions are off by default. If you turn them on (`captions.enabled: true`), set `FONT_PATH` to an **absolute** path to a `.ttf`/`.otf`. ffmpeg's text filter rejects relative paths. On Windows, use forward slashes: `C:/Windows/Fonts/arial.ttf`.
-
----
-
-## Security notes
-
-Most of what this tool touches is a credential. Worth knowing what each one can do.
-
-**What lives on your machine, and what it grants**
-
-| File | Contains | If leaked |
-|---|---|---|
-| `.env` | all API keys plus the YouTube refresh token | the refresh token allows uploading to your channel until you revoke it |
-| `client_secret.json` | OAuth client ID and secret | identifies your app; not sufficient alone to reach your channel, but should not be public |
-| `token.json` | cached access token | short-lived, but treat as sensitive |
-
-All three are gitignored. So is `work/`, `logs/`, and everything in `scripts/` except `example.md`.
-
-**Scope is deliberately minimal.** `get_token.py` requests only `youtube.upload`. It cannot read your videos, your analytics, your comments or your account details, and it cannot delete anything. If you extend it, keep the scope as narrow as the job allows.
-
-**Uploads are always private.** `upload.py` sets `privacyStatus: private` with a scheduled `publishAt`. There is no code path that publishes immediately. Nothing reaches an audience without you or the schedule allowing it.
-
-**Rotate anything you paste anywhere.** Refresh tokens and API keys get pasted into chat windows, logs and screenshots more often than anyone admits. Revoke a YouTube token at [myaccount.google.com/permissions](https://myaccount.google.com/permissions); Pexels, Pixabay and Gemini keys can be regenerated from their dashboards. It costs two minutes.
-
-**`.gitignore` protects the future, not the past.** If a secret was ever *committed*, rewriting history does not unpublish it — GitHub serves unreachable objects by SHA indefinitely, forks keep their own copies, and caches are beyond your reach. Rotation is the only real fix. Note also that merely *staging* a file leaves a loose object in `.git/objects`; it is never pushed, but `git reflog expire --expire-unreachable=now --all && git gc --prune=now` will clear it locally.
-
-**Everything here runs on your machine.** No telemetry, no analytics, no phone-home. The only outbound calls are to Pexels, Pixabay, Google and — if you use the `edge` backend — Microsoft.
+Captions are off by default. If enabled, set `FONT_PATH` to an **absolute** path to a `.ttf`/`.otf`. ffmpeg's text filter rejects relative paths. On Windows use forward slashes: `C:/Windows/Fonts/arial.ttf`.
 
 ---
 
 ## Choosing a TTS backend
 
-`tts.backend` in `config.yaml` selects one of two. Both produce one wav per chunk with identical timing behaviour; only the voice differs.
+`tts.backend` selects one of three. All three write one wav per chunk, apply the same inter-chunk pause, and measure the real duration off disk, so timing behaviour is identical whichever you use.
 
-| | `edge` (default) | `kokoro` |
-|---|---|---|
-| Runs | network call to Microsoft | locally on your machine |
-| Needs | nothing extra | espeak-ng + ~82 MB model download |
-| Speed | fast | slower (local inference) |
-| Voice | `tts.edge_voice`, e.g. `en-GB-RyanNeural` | `tts.voice`, e.g. `bm_daniel` |
-| Rate | `tts.edge_rate`, e.g. `"-8%"` | `tts.speed`, e.g. `0.9` |
-| Works offline | no | yes |
+| | `elevenlabs` (default) | `edge` | `kokoro` |
+|---|---|---|---|
+| Cost | ~1 credit per character | free | free |
+| Runs | ElevenLabs REST API | undocumented Microsoft endpoint | locally on your machine |
+| Needs | paid account + API key | nothing | espeak-ng + ~82 MB model |
+| Commercial use | yes, on a paid plan | **not licensed** | yes, permissive licence |
+| Voice setting | `tts.elevenlabs_voice_id` | `tts.edge_voice` | `tts.voice` |
+| Speed control | not on `eleven_v3` | `tts.edge_rate` | `tts.speed` |
+| Audio tags | yes, on `eleven_v3` | no | no |
+| Works offline | no | no | yes |
 
-**The trade-off, stated plainly.** `edge` is faster, needs no local model and sounds good. But it drives the undocumented endpoint behind Microsoft Edge's "Read Aloud" feature. That is not a published API. It has no version guarantee, no support, no uptime commitment, and **it is not licensed for commercial use** — Microsoft's terms cover it as a browser feature, not as a service you may build a product on. If you are monetising the output, or you need this to keep working unattended, use `kokoro`, which runs locally under a permissive licence with none of those questions.
+**The trade-off, stated plainly.**
 
-`kokoro` is kept fully working for exactly this reason. Switching is one line in `config.yaml`.
+`elevenlabs` sounds materially better than the other two and is properly licensed for commercial use, but it bills per character.
 
-If a chunk fails on `edge` after its retries, the stage **stops** rather than falling back to Kokoro — swapping synthesiser mid-run would change the narrator's voice partway through the finished video. Re-run `tts.py` to resume; completed chunks are skipped.
+`edge` is free and sounds good, but it drives the undocumented endpoint behind Microsoft Edge's "Read Aloud" feature. That is not a published API — no version guarantee, no support, no uptime commitment, and **it is not licensed for commercial use**. If you are monetising the output, that is a real liability rather than a technicality.
 
-`python doctor.py` checks Ollama and both TTS backends every run, and verifies
-`tts.edge_voice` against the live voice list.
+`kokoro` is free, local, offline and permissively licensed. It is the weakest of the three on quality and the only one that keeps working with no network.
+
+**Model choice within ElevenLabs.** `eleven_v3` supports audio tags but does **not** accept a numeric `speed` parameter, so pacing has to be controlled through punctuation and tags. `eleven_multilingual_v2` accepts `speed` and is the more stable long-form option, but ignores audio tags. Pick based on which matters more to you.
+
+Relevant config keys: `elevenlabs_voice_id`, `elevenlabs_model`, `elevenlabs_stability`, `elevenlabs_similarity`, `elevenlabs_output_format`.
+
+**No mid-video fallback.** If a chunk fails after its retries, the stage stops rather than switching backend — swapping synthesiser part-way would change the narrator's voice inside the finished video. Re-run `tts.py` to resume; completed chunks are skipped and cost nothing.
+
+---
+
+## Audio tags
+
+On `eleven_v3` you can put ElevenLabs audio tags in square brackets directly in your script to direct the delivery:
+
+```markdown
+That is the ending of this story.
+
+[pause]
+
+To understand why, you have to go back to a Saturday morning in August.
+```
+
+Tags reach the ElevenLabs API and nothing else. `script.py` stores two versions of every chunk:
+
+- `chunk["tts_text"]` — raw, tags intact. Only the ElevenLabs backend reads it.
+- `chunk["text"]` — stripped. Everything else uses this: keyword extraction, number overlays, vertical-clip captions, and the `edge` and `kokoro` backends.
+
+Without that split, tags would pollute your image search terms and appear burned into your vertical clip captions.
+
+**Use them sparingly.** ElevenLabs' own guidance is that heavy tag use causes instability, and for scripted narration most pacing is better handled with sentence length, ellipses and dashes. Tags bill as characters like anything else, though the overhead is trivial — a handful adds a few dozen characters to a whole video.
+
+---
+
+## Cost control
+
+ElevenLabs bills when a generation **runs**, not when a file is downloaded, so a bug that re-synthesises is expensive rather than merely slow. Several guards exist.
+
+**Price a script before committing to it:**
+
+```bash
+python tts.py --date 2026-08-10 --dry-run-cost
+```
+
+Reports the character count and estimated credits without calling the API at all.
+
+**A hard ceiling.** `tts.max_characters_per_run` (default 40,000) stops the run if a single invocation would exceed it. Pass `--confirm-cost` to proceed deliberately.
+
+**Completed chunks are never re-synthesised** unless you pass `--force`. A failed run resumes for free, and a second run of a finished date submits zero characters.
+
+**A truncation guard.** Audio much shorter than the text implies means the stream was cut short despite a successful response. That chunk is retried rather than written.
+
+Rate limits are honoured via `Retry-After`, and retries use exponential backoff.
 
 ---
 
@@ -333,33 +333,32 @@ If a chunk fails on `edge` after its retries, the stage **stops** rather than fa
 python doctor.py
 ```
 
-It verifies ffmpeg, ffprobe, espeak-ng, every Python package, every `.env` key,
-Ollama/model readiness, both TTS backends, and that `work/` is writable. Output
-looks like this:
+Verifies ffmpeg, ffprobe, espeak-ng, every Python package, every `.env` key, all TTS backends — including whether your ElevenLabs voice and model actually resolve — Ollama readiness, and that `work/` is writable.
 
 ```
 Pipeline preflight (doctor.py)
 ============================================================
-  [✓] PASS  ffmpeg          C:\...\ffmpeg.exe
-  [✓] PASS  edge-tts        edge-tts ok; voice 'en-GB-RyanNeural' present (322 voices live)
-  [✓] PASS  .env PEXELS_API_KEY   set (56 chars)
+  [✓] PASS  ffmpeg                    C:\...\ffmpeg.exe
+  [✓] PASS  .env ELEVENLABS_API_KEY   set (51 chars)
+  [✓] PASS  ElevenLabs API            voice and model resolve
+  [✓] PASS  .env PEXELS_API_KEY       set (56 chars)
   ...
 ```
 
-**Fix every ✗ before going further.** A failure here costs you seconds; the same failure during a real run costs you an hour of rendering.
+**Fix every ✗ before going further.** A typo in a voice ID caught here costs seconds; caught during a run it costs an hour of rendering and a wasted synthesis.
 
 ### 2. Write a script
 
-Save it as `scripts/YYYY-MM-DD.md`. See [`scripts/example.md`](scripts/example.md) for the format:
+Save as `scripts/YYYY-MM-DD.md`. See [`scripts/example.md`](scripts/example.md):
 
 - the first `# Heading` becomes the video title
 - `<!-- description: ... -->` becomes the YouTube description
 - `<!-- tags: a, b, c -->` becomes the tags
 - every blank-line-separated paragraph becomes one narration chunk
 
-Your scripts stay on your machine — everything in `scripts/` except `example.md` is gitignored.
+Everything in `scripts/` except `example.md` is gitignored.
 
-**Write for the ear, not the page.** The narration is synthesised once and never edited, so anything ambiguous on the page becomes ambiguous in the audio. In practice that means: spell numbers and money out in words rather than using digits or symbols, avoid brackets and slashes (they vanish audibly and the sentence collapses), keep sentences under about 25 words, and make each paragraph self-contained — the pipeline splits on paragraphs, so one that trails into the next will sound broken.
+**Write for the ear, not the page.** The narration is synthesised once and never edited, so anything ambiguous on the page becomes ambiguous in the audio. Spell numbers and money out in words rather than using digits or symbols. Avoid brackets and slashes — they vanish audibly and the sentence collapses. Keep sentences under about 25 words. Make each paragraph self-contained, since the pipeline splits on paragraphs.
 
 ### 3. Do a dry run
 
@@ -367,9 +366,9 @@ Your scripts stay on your machine — everything in `scripts/` except `example.m
 ./run.sh --dry-run --skip-upload
 ```
 
-This builds a ~30 second video from the first few chunks and exercises the entire chain in about two minutes. **Do this before trusting a full render.**
+Builds a ~30 second video from the first few chunks and exercises the whole chain in about two minutes.
 
-> ⚠️ A dry run **overwrites** `chunks.json` and `video.mp4` for that date with the shortened version. Never dry-run against a date whose full render you want to keep. A full render started against dry-run state will silently produce a 30-second video that passes QC, because QC compares the video against its own audio and both are the truncated version.
+> ⚠️ A dry run **overwrites** `chunks.json` and `video.mp4` for that date with the shortened version. Never dry-run against a date whose full render you want to keep. A full render started against dry-run state silently produces a 30-second video that **passes QC**, because QC compares the video against its own audio and both are truncated.
 
 ### 4. Do the real run
 
@@ -377,9 +376,7 @@ This builds a ~30 second video from the first few chunks and exercises the entir
 ./run.sh --date 2026-07-28
 ```
 
-`run.sh` stops at the first failing stage, so a QC failure halts before upload. Everything is logged to `logs/run-<date>.log`, including the Studio URL on success — search the log for `UPLOAD OK`.
-
-Useful variants:
+Stops at the first failing stage, so a QC failure halts before upload. Logged to `logs/run-<date>.log`, including the Studio URL on success — search for `UPLOAD OK`.
 
 ```bash
 ./run.sh --skip-upload      # render and QC, but do not upload
@@ -387,8 +384,6 @@ Useful variants:
 ```
 
 ### Running without run.sh (or on PowerShell)
-
-`run.sh` is only a convenience wrapper. The six stages are just programs, run in order:
 
 ```bash
 python script.py  --date 2026-07-28
@@ -399,27 +394,16 @@ python qc.py      --date 2026-07-28
 python upload.py  --date 2026-07-28
 ```
 
-Optional offline outputs, after the main assets exist:
+Optional offline outputs, once the main assets exist. Set the corresponding `enabled` flag in `config.yaml` first:
 
 ```bash
-# First set the corresponding enabled flag in config.yaml.
-python clips.py --date 2026-07-28
+python clips.py  --date 2026-07-28
 python charts.py --date 2026-07-28
 ```
 
 ### Re-running a single stage
 
-Any stage can be re-run on its own with the same flags. This is how you recover from a failure without redoing everything:
-
-```bash
-python render.py --date 2026-07-28
-python qc.py     --date 2026-07-28
-```
-
-**Stages skip work that is already done.** `tts.py` skips chunks that already
-have audio and a measured duration; `images.py` skips chunks that already have
-enough images on disk; and `render.py` reuses non-empty clips whose duration and
-config fingerprint match. To force them to redo it:
+**Stages skip work already done.** `tts.py` skips chunks with audio and a measured duration; `images.py` skips chunks with enough images; `render.py` reuses non-empty clips whose duration and config fingerprint match. To force:
 
 ```bash
 python tts.py    --date 2026-07-28 --force
@@ -427,13 +411,13 @@ python images.py --date 2026-07-28 --force
 python render.py --date 2026-07-28 --force
 ```
 
-> ⚠️ **`script.py` is the exception.** It rewrites `chunks.json` from scratch, discarding measured durations and image paths. Re-running the whole pipeline after a late failure therefore redoes all the narration and re-downloads every image. If only render/qc/upload failed, run those three directly instead.
+> ⚠️ **`script.py` is the exception.** It rewrites `chunks.json` from scratch, discarding measured durations and image paths — so re-running the whole pipeline after a late failure redoes all narration, which now costs money. If only render, QC or upload failed, run those directly.
 
-> If you change TTS backend or voice, re-run `tts.py --force`. Without it, existing wavs are kept and you get a video that changes narrator part-way through.
+> **Changing TTS backend or voice requires `tts.py --force`.** Without it, existing wavs are kept and you get a video that changes narrator part-way through.
 
 ### Upload behaviour
 
-Uploads are **always** private, with the publish time set to the next occurrence of `upload.publish_time` in `upload.timezone`. Nothing is ever public the moment it uploads. If that time has already passed today, it rolls to tomorrow.
+Uploads are **always** private, with the publish time set to the next occurrence of `upload.publish_time` in `upload.timezone`. Nothing is ever public the moment it uploads. If that time has passed today, it rolls to tomorrow.
 
 ---
 
@@ -441,26 +425,23 @@ Uploads are **always** private, with the publish time set to the next occurrence
 
 Rough numbers from real runs on an ordinary desktop CPU, no GPU.
 
-| | 13-minute video | 18-minute video |
+| | shorter video | longer video |
 |---|---|---|
-| Script length (words) | ~1,900 | ~2,700 |
-| Chunks (paragraphs) | ~45 | ~67 |
-| Images downloaded | ~85 | ~117 |
-| Narration (TTS) | ~4 min (edge) | ~7 min (edge) |
-| Image downloads | ~4 min | ~7 min |
-| **Encoding** | **~40 min** | **~65 min** |
+| Script length (words) | ~1,900 | ~3,000 |
+| Chunks (paragraphs) | ~70 | ~78 |
+| Characters billed | ~9,300 | ~13,000 |
+| Images downloaded | ~85–120 | ~150 |
+| Narration (ElevenLabs) | a few minutes | a few minutes |
+| **Encoding** | **~40 min** | **~65 min+** |
 | Output file | ~450 MB | ~590 MB |
 
-**Sizing a script.** Measured on `en-GB-RyanNeural` at `rate: "-8%"` with a 0.5s inter-chunk pause: **149 words per minute of speech, 145 effective**. So multiply your target minutes by about 145 to get the word count you need. Kokoro at `speed: 0.9` runs considerably faster — closer to 215 wpm — so the same script produces a much shorter video. Measure your own once and use that.
+**Sizing a script — measure your own.** Pace varies substantially between backends, voices and models, by enough to throw a target length out by several minutes. A short sample is not a reliable guide: measure across a full render, dividing total words by narration seconds excluding inter-chunk pauses. As a historical data point, `edge` with `en-GB-RyanNeural` at `rate: "-8%"` measured about 145 effective words per minute, and Kokoro at `speed: 0.9` ran considerably quicker. Do not assume either applies to your setup.
 
-**Encoding dominates, and it is slow by design.** Each still is upscaled hugely before the zoom is applied — that is what stops the pan juddering — so budget **25–30 seconds per clip**. A progress bar that has not moved for half a minute is normal, not a hang. Encoding scales linearly with length, so a 50-minute video is a 3–4 hour render; start those when the machine is otherwise free.
+**Encoding dominates, and it is slow by design.** Each still is upscaled hugely before the zoom is applied — that is what stops the pan juddering — so budget **25–30 seconds per clip**. A progress bar that has not moved for half a minute is normal. Encoding scales linearly, so a 50-minute video is a 3–4 hour render. Start those when the machine is otherwise free.
 
-**Cost.** Effectively zero. Pexels, Pixabay and the YouTube API are free at this
-volume, and the optional production model runs locally. The real costs are your
-electricity and your time. `edge` TTS is free but see the licensing note above;
-`kokoro` and Ollama are free and local.
+**Cost.** Not zero any more. Pexels, Pixabay and the YouTube API are free at this volume, and Kokoro and Ollama are local. ElevenLabs is the paid component at roughly one credit per character, so **£2–4 per video** depending on plan and length. Switch `tts.backend` to `kokoro` for a genuinely free pipeline, accepting the quality drop.
 
-**Disk.** Each run keeps its clips, images, audio and video under `work/<date>/`. Budget 1–2 GB per video and clear out old dates yourself.
+**Disk.** Each run keeps clips, images, audio and video under `work/<date>/`. Budget 1–2 GB per video and clear out old dates yourself.
 
 ---
 
@@ -468,21 +449,21 @@ electricity and your time. `edge` TTS is free but see the licensing note above;
 
 Everything tunable is in [`config.yaml`](config.yaml), commented inline:
 
-- **video** — resolution, frame rate, x264 quality, Ken Burns pacing, and deterministic per-image pace variation
-- **tts** — backend, voice, rate, and the pause inserted after each chunk
-- **llm** — enable/disable the local model, Ollama host/model, timeout, context, retries, and keywords per chunk
+- **video** — resolution, frame rate, x264 quality, Ken Burns pacing, deterministic per-image pace variation
+- **tts** — backend selection, per-backend voice and model settings, inter-chunk pause, cost ceiling
+- **llm** — the experimental local-model keyword backend: enable/disable, Ollama host and model, timeout, context, retries
 - **images** — results per query, orientation, minimum size, and `query_suffix` (appended to every search to bias the whole video toward one look)
-- **grade** — colour grade: saturation/contrast/gamma, shadow tint, vignette. Set `enabled: false` to skip it entirely
+- **grade** — colour grade: saturation, contrast, gamma, shadow tint, vignette. `enabled: false` skips it entirely
 - **captions** — burned-in subtitles, off by default
-- **audio** — final-mux narration normalisation, compression/EQ, and an optional user-supplied music path
-- **overlays** — one late-biased, source-parsed spoken figure per chunk
-- **clips** — vertical-clip count, 15–55 second window, and optional forced chunk indices
-- **charts** — scratch chart-card limit and minimum comparison ratio; never enables render insertion
+- **audio** — narration normalisation, compression and EQ at the final mux, plus an optional user-supplied music path
+- **overlays** — one late-biased spoken figure per chunk, parsed from the narration
+- **clips** — vertical-clip count, duration window, optional forced chunk indices
+- **charts** — scratch chart-card limit and minimum comparison ratio. Never inserts into a render
 - **upload** — privacy, publish time, timezone, category, tags, default description
 - **qc** — thresholds for each check
 - **dry_run** — how short the validation video is
 
-Two settings do more than their size suggests. `images.query_suffix` and the `grade` block together are most of what makes disparate stock photography look like one film — a consistent search bias plus a consistent colour grade will do more for the finished look than better keywords will.
+Two settings do more than their size suggests. `images.query_suffix` and the `grade` block together are most of what makes disparate stock photography look like one film — a consistent search bias plus a consistent colour grade beats better keywords.
 
 Secrets never go in `config.yaml`. They live in `.env`.
 
@@ -492,55 +473,64 @@ Secrets never go in `config.yaml`. They live in `.env`.
 
 Stated honestly, because they will affect you.
 
-**Local-model quality is bounded by model size.** The default `qwen3.5:4b`
-model is chosen to be practical on a CPU-only machine. Stage 1 constrains its
-output to structured JSON and rejects malformed, repeated, overly long, or
-abstract search terms, but a small model can still make less relevant choices
-than a larger one. Keep the fallback enabled and review keyword logs when
-trying a different model.
+**Image relevance is bounded by stock search.** Even with perfect keywords you are getting generic stock photography, and it looks like it. Stock libraries are also global, so a query for "cash" or "documents" will happily return imagery from the wrong country — bias `images.query_suffix` toward your region and audit the keyword list before a long render.
 
-**The heuristic fallback is crude.** It maps trigger words in your narration onto a fixed table of photographable phrases ("regulator" → "government office building"), topping up from a small rotating pool of generic imagery. It is hand-written, English-only, and biased toward the finance and current-affairs vocabulary it was built against. **On other subject matter it will drift to the generic pool and your imagery will be repetitive and only loosely related.** It exists so an API outage degrades to a watchable video instead of failing the run — it is not a substitute for the real thing. If you work in a different subject area, extend the table in `script.py`; the repetition problem gets worse with length, so check repeat counts as well as fall-through rate on anything over about 40 chunks.
+**The heuristic keyword fallback is crude.** It maps trigger words onto a fixed table of photographable phrases ("regulator" → "government office building"), topping up from a small rotating pool. Hand-written, English-only, and biased toward the finance and current-affairs vocabulary it was built against. On other subject matter it drifts to the generic pool and imagery becomes repetitive. Extend the table in `script.py` for your own domain, and check repeat counts as well as fall-through rate on anything over about 40 chunks.
 
-**It assumes British English and UK stock imagery.** The default voices are British, the publish schedule is `Europe/London`, image searches lean UK, and the keyword table is full of British institutions. Configurable, but you will be editing more than one line.
+**The local-model keyword backend is unfinished.** `llm.enabled` defaults to false and the path has never been validated against a live model. Leave it off unless you intend to do that work; Stage 1 then takes the deterministic heuristic path.
 
-**Only tested on Windows.** Developed and exercised on Windows 11. The code is plain Python and ffmpeg with nothing knowingly platform-specific, and the macOS/Linux instructions above are correct as far as they go — but they have not been run end to end. Treat non-Windows as unverified, and please open an issue if you hit something.
+**It assumes British English and UK stock imagery.** Default voices are British, the publish schedule is `Europe/London`, image searches lean UK, and the keyword table is full of British institutions. Configurable, but you will be editing more than one line.
 
-**Image relevance is bounded by stock search.** Even with perfect keywords you are getting generic stock photography, and it looks like generic stock photography. For anything argument-led, expect to make your own chart cards and drop them in.
+**Only tested on Windows.** Developed and exercised on Windows 11. The code is plain Python and ffmpeg with nothing knowingly platform-specific, and the macOS/Linux instructions are correct as far as they go — but they have not been run end to end. Treat non-Windows as unverified and open an issue if you hit something.
 
-**Vertical crops are blunt.** `clips.py` centre-crops landscape stills to 9:16.
-That avoids reach-killing black bars, but typically retains only about a third
-of a 16:9 image's width and cannot know whether the subject was off-centre.
+**Vertical crops are blunt.** `clips.py` centre-crops landscape stills to 9:16. That avoids reach-killing black bars, but retains only about a third of a 16:9 image's width and cannot know whether the subject was off-centre. Expect one or two of six to be badly composed.
 
-**Automatic figures are deliberately conservative.** Overlays and charts parse
-explicit English number phrases only. Chart candidates additionally need clear
-comparison language, matching units, a large enough ratio, and source-span
-verification. Ambiguous candidates are dropped.
+**Automatic figures are deliberately conservative.** Overlays and charts parse explicit English number phrases only. Chart candidates additionally require clear comparison language, matching units, a large enough ratio, and verification that every figure appears in the source text. Ambiguous candidates are dropped, because a fabricated chart would look entirely convincing.
 
-**Music is bring-your-own and currently unverified.** The final-mux branch can
-mix and side-chain a configured local track, but no track is bundled, selected,
-downloaded, or licensed by this project; the empty default path leaves it off.
+**Music is bring-your-own.** The final mux can loop, mix and side-chain a local track, but nothing is bundled, chosen, downloaded or licensed by this project. The empty default path leaves it off. If you add one, make sure it is cleared for commercial use.
 
-**`edge` TTS depends on an undocumented endpoint** that is not licensed for commercial use. See [Choosing a TTS backend](#choosing-a-tts-backend).
+**`edge` TTS depends on an undocumented endpoint** not licensed for commercial use. See [Choosing a TTS backend](#choosing-a-tts-backend).
 
-**Only official APIs are used** — Ollama's local API plus the Pexels and Pixabay
-search endpoints, no scraping. Remote HTTP calls retry with exponential backoff
-and honour `Retry-After`.
+**Only official APIs are used** — ElevenLabs, Pexels, Pixabay, YouTube, and Ollama's local API. No scraping. Remote calls retry with exponential backoff and honour `Retry-After`.
 
 ### Planned, not implemented
 
-- Finish and live-model-test the disabled Ollama keyword backend.
-- Evaluate stock video as an alternative to stills; this would substantially
-  increase downloads and storage.
-- Choose, license, and validate music. The code accepts a user-supplied local
-  path, but the project will not pick or download a track.
+- Finish and live-test the local-model keyword backend.
+- Evaluate stock video as an alternative to stills. Would substantially increase download volume and storage.
+- Automated, licence-filtered music sourcing. The code accepts a local path; the project does not pick or download tracks.
+- Saliency-aware vertical cropping, rather than centre-crop.
+
+---
+
+## Security notes
+
+Most of what this tool touches is a credential.
+
+| File | Contains | If leaked |
+|---|---|---|
+| `.env` | all API keys plus the YouTube refresh token | the refresh token allows uploading to your channel until revoked; the ElevenLabs key allows spending your credits |
+| `client_secret.json` | OAuth client ID and secret | identifies your app; not sufficient alone to reach your channel, but should not be public |
+| `token.json` | cached access token | short-lived, but treat as sensitive |
+
+All three are gitignored, along with `work/`, `logs/`, and everything in `scripts/` except `example.md`.
+
+**Scope is deliberately minimal.** `get_token.py` requests only `youtube.upload`. It cannot read your videos, analytics, comments or account details, and cannot delete anything. If you extend it, keep the scope as narrow as the job allows.
+
+**Uploads are always private.** `upload.py` sets `privacyStatus: private` with a scheduled `publishAt`. There is no code path that publishes immediately.
+
+**Rotate anything you paste anywhere.** Keys and tokens end up in chat windows, logs and screenshots more often than anyone admits. Revoke a YouTube token at [myaccount.google.com/permissions](https://myaccount.google.com/permissions); ElevenLabs, Pexels and Pixabay keys can be regenerated from their dashboards. Two minutes each.
+
+**`.gitignore` protects the future, not the past.** If a secret was ever *committed*, rewriting history does not unpublish it — GitHub serves unreachable objects by SHA indefinitely, forks keep their own copies, and caches are beyond your reach. Rotation is the only real fix. Note also that merely *staging* a file leaves a loose object in `.git/objects`; it is never pushed, but `git reflog expire --expire-unreachable=now --all && git gc --prune=now` clears it locally.
+
+**Everything runs on your machine.** No telemetry, no analytics, no phone-home. The only outbound calls are to ElevenLabs, Pexels, Pixabay, Google, and — on the `edge` backend — Microsoft.
 
 ---
 
 ## How this was built
 
-Parts of this codebase were written with AI assistance (Claude), and some commits carry a `Co-Authored-By` trailer to that effect. **It is not an AI-generated project.** The design, the architecture, the decisions about what the tool should and shouldn't do, and every script ever run through it are human work. The AI contribution is implementation and iteration against that direction, reviewed and tested by a person before it landed.
+Parts of this codebase were written with AI assistance, and some commits carry a `Co-Authored-By` trailer to that effect. **It is not an AI-generated project.** The design, the architecture, the decisions about what the tool should and shouldn't do, and every script ever run through it are human work. The AI contribution is implementation and iteration against that direction, reviewed and tested by a person before it landed.
 
-Worth saying plainly because the distinction matters twice over here. It matters for the code: nothing in this repository is unreviewed generated output, and the limitations section above is an honest account of what has and hasn't been exercised rather than a generated boilerplate list. And it matters for the thing the tool produces — a pipeline that narrates and illustrates scripts *you* wrote would be a strange place to pretend authorship doesn't matter.
+Worth saying plainly because the distinction matters twice over. It matters for the code: nothing here is unreviewed generated output, and the limitations section above is an honest account of what has and hasn't been exercised rather than generated boilerplate. And it matters for what the tool produces — a pipeline that narrates and illustrates scripts *you* wrote would be a strange place to pretend authorship doesn't matter.
 
 If you use this, the same applies to you. The pipeline handles the mechanical work. It doesn't make the video yours; writing it does.
 
@@ -548,10 +538,15 @@ If you use this, the same applies to you. The pipeline handles the mechanical wo
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). If you are looking for somewhere useful to start: render checkpointing, a keyword table for a non-finance subject area, or simply running the macOS or Linux instructions end to end and reporting what broke.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Useful places to start:
+
+- **Run the macOS or Linux instructions end to end** and report what broke. Nothing outside Windows has been verified.
+- **A keyword table for a non-finance subject area.** The existing one is narrow and it shows.
+- **Saliency-aware vertical cropping**, rather than centre-crop.
+- **Finish the local-model keyword backend** and validate it against a real model.
 
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
 
-Stock imagery comes from Pexels and Pixabay under their respective licences. You are responsible for the scripts you write and the videos you publish.
+Stock imagery comes from Pexels and Pixabay under their respective licences. Narration generated through a paid ElevenLabs plan is yours to use commercially; the free tier is not. You are responsible for the scripts you write and the videos you publish.
